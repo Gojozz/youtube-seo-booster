@@ -162,61 +162,74 @@ async function analyzeKeyword() {
 
 
 function renderKeyword(data) {
+  const market = data.market || {};
 
-  const market =
-    data.market || {};
+  const setText = (id, value) => {
+    const el = $(id);
+    if (el) el.textContent = value;
+  };
 
-  $('opportunityScore').textContent =
-    `${market.opportunityScore ?? 0}/100`;
+  setText(
+    'opportunityScore',
+    `${market.opportunityScore ?? 0}/100`
+  );
 
-  $('opportunityLabel').textContent =
+  setText(
+    'opportunityLabel',
     market.opportunityLabel ||
-    scoreText(
-      market.opportunityScore
-    );
+      scoreText(market.opportunityScore)
+  );
 
-  $('competitionScore').textContent =
-    `${market.competitionScore ?? 0}/100`;
+  setText(
+    'competitionScore',
+    `${market.competitionScore ?? 0}/100`
+  );
 
-  $('competitionLabel').textContent =
-    market.level ||
-    '-';
+  setText(
+    'competitionLabel',
+    market.level || '-'
+  );
 
-  $('relevanceScore').textContent =
-    `${market.averageRelevance ?? 0}/100`;
+  setText(
+    'relevanceScore',
+    `${market.averageRelevance ?? 0}/100`
+  );
 
-  $('medianViews').textContent =
-    formatNumber(
-      market.medianViews
-    );
+  setText(
+    'medianViews',
+    formatNumber(market.medianViews)
+  );
 
-  $('marketMedian').textContent =
-    formatNumber(
-      market.medianViews
-    );
+  setText(
+    'marketMedian',
+    formatNumber(market.medianViews)
+  );
 
-  $('marketSEO').textContent =
-    `${market.averageSEO ?? 0}/100`;
+  setText(
+    'marketSEO',
+    `${market.averageSEO ?? 0}/100`
+  );
 
-  $('marketRelevance').textContent =
-    `${market.averageRelevance ?? 0}/100`;
+  setText(
+    'marketRelevance',
+    `${market.averageRelevance ?? 0}/100`
+  );
 
-  $('videoCount').textContent =
-    data.totalResults || 0;
+  setText(
+    'videoCount',
+    data.totalResults || 0
+  );
 
-  $('keywordRecommendation').textContent =
+  setText(
+    'keywordRecommendation',
     market.recommendation ||
-    'Belum ada rekomendasi.';
-
-  renderCompetitors(
-    data.items || []
+      'Belum ada rekomendasi.'
   );
 
-  show(
-    $('keywordResult')
-  );
+  renderCompetitors(data.items || []);
+
+  show($('keywordResult'));
 }
-
 
 function renderCompetitors(items) {
 
@@ -475,97 +488,97 @@ async function analyzeVideo() {
 
 
 function renderVideo(data) {
+  const item = data.item || {};
+  const analysis = data.analysis || {};
 
-  const item =
-    data.item || {};
+  const setText = (id, value) => {
+    const el = $(id);
+    if (el) el.textContent = value;
+  };
 
-  const analysis =
-    data.analysis || {};
-
-  $('videoThumb').src =
-    item.thumb || '';
-
-  $('videoTitle').textContent =
-    item.title || '-';
-
-  $('videoChannel').textContent =
-    item.channelTitle || '-';
-
-  $('videoSeoScore').textContent =
-    `${analysis.seoScore ?? 0}/100`;
-
-  $('videoSeoText').textContent =
-    analysis.seoLabel ||
-    scoreText(
-      analysis.seoScore
-    );
-
-  const videoSeoLabel = $('videoSeoLabel');
-  if (videoSeoLabel) {
-    videoSeoLabel.textContent =
-      analysis.seoLabel ||
-      scoreText(
-        analysis.seoScore
-      );
+  const thumb = $('videoThumb');
+  if (thumb) {
+    thumb.src = item.thumb || '';
   }
 
-  $('videoRelevance').textContent =
-    `${analysis.relevance ?? 0}`;
+  setText('videoTitle', item.title || '-');
+  setText('videoChannel', item.channelTitle || '-');
 
-  $('videoTitleScore').textContent =
-    `${analysis.title ?? 0}`;
+  setText(
+    'videoSeoScore',
+    `${analysis.seoScore ?? 0}/100`
+  );
 
-  $('videoDescriptionScore').textContent =
-    `${analysis.description ?? 0}`;
+  const seoLabel =
+    analysis.seoLabel ||
+    scoreText(analysis.seoScore);
 
-  $('videoTagsScore').textContent =
-    `${analysis.tags ?? 0}`;
+  setText('videoSeoText', seoLabel);
+  setText('videoSeoLabel', seoLabel);
 
-  $('videoEngagement').textContent =
-    `${analysis.engagement ?? 0}`;
+  setText(
+    'videoRelevance',
+    `${analysis.relevance ?? 0}`
+  );
 
-  $('videoViews').textContent =
-    formatNumber(
-      analysis.views
-    );
+  setText(
+    'videoTitleScore',
+    `${analysis.title ?? 0}`
+  );
 
-  $('videoVelocity').textContent =
-    `${formatNumber(
-      analysis.velocity
-    )}`;
+  setText(
+    'videoDescriptionScore',
+    `${analysis.description ?? 0}`
+  );
 
-  $('videoAge').textContent =
-    analysis.age || item.age || '-';
+  setText(
+    'videoTagsScore',
+    `${analysis.tags ?? 0}`
+  );
 
-  $('videoPublished').textContent =
+  setText(
+    'videoEngagement',
+    `${analysis.engagement ?? 0}`
+  );
+
+  setText(
+    'videoViews',
+    formatNumber(analysis.views)
+  );
+
+  setText(
+    'videoVelocity',
+    formatNumber(analysis.velocity)
+  );
+
+  setText(
+    'videoAge',
+    analysis.age || item.age || '-'
+  );
+
+  setText(
+    'videoPublished',
     item.publishedAt
-      ? new Date(
-          item.publishedAt
-        ).toLocaleString(
-          'id-ID'
-        )
-      : '-';
+      ? new Date(item.publishedAt).toLocaleString('id-ID')
+      : '-'
+  );
 
-  $('videoLikes').textContent =
-    formatNumber(
-      item.likes
-    );
+  setText(
+    'videoLikes',
+    formatNumber(item.likes)
+  );
 
-  $('videoComments').textContent =
-    formatNumber(
-      item.comments
-    );
+  setText(
+    'videoComments',
+    formatNumber(item.comments)
+  );
 
   renderSuggestions(
-    data.suggestions ||
-    []
+    data.suggestions || []
   );
 
-  show(
-    $('videoResult')
-  );
+  show($('videoResult'));
 }
-
 
 function renderSuggestions(
   suggestions
@@ -634,8 +647,6 @@ function showError(
   message
 ) {
 
-  element.textContent =
-    message;
-
-  show(element);
+  if (marketMedian) {
+  }
 }
