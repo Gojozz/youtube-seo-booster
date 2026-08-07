@@ -1271,3 +1271,18 @@ footer {
   }
 
 }
+
+/* Fix SEO Generator button click */
+#generateSeoBtn {
+  position: relative;
+  z-index: 100;
+  pointer-events: auto !important;
+  cursor: pointer !important;
+}
+
+#generatorBtn {
+  position: relative;
+  z-index: 100;
+  pointer-events: auto !important;
+  cursor: pointer !important;
+}
