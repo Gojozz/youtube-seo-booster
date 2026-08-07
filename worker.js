@@ -1,119 +1,49 @@
 const API = 'https://www.googleapis.com/youtube/v3';
 
-// ======================================================
-// YouTube SEO Booster V3
-// ======================================================
-// Features:
-// - YouTube search
-// - KV caching
-// - Stale cache
-// - IP rate limiting
-// - SEO Score
-// - Relevance Score
-// - Competition Score
-// - Opportunity Score
-// - Freshness Score
-// - Engagement Score
-// - Competitor analysis
-// - Keyword analysis
-//
-// Required Worker bindings:
-// - YOUTUBE_API_KEY : Worker Secret
-// - CACHE           : KV Namespace
-// - ASSETS          : Assets binding
-// ======================================================
+const SEARCH_TTL = 1800;
+const VIDEO_TTL = 600;
+const STALE_TTL = 7200;
 
-
-// ======================================================
-// CONFIG
-// ======================================================
-
-const SEARCH_TTL = 1800;       // 30 menit
-const VIDEO_TTL = 600;         // 10 menit
-const STALE_TTL = 7200;        // 2 jam
-
-const RATE_WINDOW = 60;        // 60 detik
-const RATE_LIMIT = 20;         // 20 request / IP / menit
-
-const MAX_RESULTS = 25;
-
-
-// ======================================================
-// MAIN WORKER
-// ======================================================
+const RATE_WINDOW = 60;
+const RATE_LIMIT = 20;
 
 export default {
   async fetch(request, env, ctx) {
     const u = new URL(request.url);
 
-    // ==================================================
-    // FRONTEND / ASSETS
-    // ==================================================
-
     if (!u.pathname.startsWith('/api/')) {
       return env.ASSETS.fetch(request);
     }
 
-    // ==================================================
-    // CHECK API KEY
-    // ==================================================
-
     if (!env.YOUTUBE_API_KEY) {
-      return json(
-        {
-          error:
-            'YOUTUBE_API_KEY belum dipasang sebagai Worker Secret.'
-        },
-        500
-      );
+      return json({
+        error: 'YOUTUBE_API_KEY belum dipasang sebagai Worker Secret.'
+      }, 500);
     }
-
-    // ==================================================
-    // CHECK KV
-    // ==================================================
 
     if (!env.CACHE) {
-      return json(
-        {
-          error:
-            'KV CACHE belum dikonfigurasi.'
-        },
-        500
-      );
+      return json({
+        error: 'KV CACHE belum dikonfigurasi.'
+      }, 500);
     }
 
-    // ==================================================
-    // RATE LIMIT
-    // ==================================================
-
     const ip =
-      request.headers.get('CF-Connecting-IP') ||
-      'unknown';
+      request.headers.get('CF-Connecting-IP') || 'unknown';
 
-    const rateKey =
-      `rate:${ip}`;
+    const rateKey = `rate:${ip}`;
 
     const rate =
-      (await env.CACHE.get(
-        rateKey,
-        'json'
-      )) || {
+      await env.CACHE.get(rateKey, 'json') || {
         count: 0
       };
 
     if (rate.count >= RATE_LIMIT) {
-      return json(
-        {
-          error:
-            'Terlalu banyak permintaan. Coba lagi sebentar.',
-          retryAfter: RATE_WINDOW
-        },
-        429,
-        {
-          'Retry-After':
-            String(RATE_WINDOW)
-        }
-      );
+      return json({
+        error: 'Terlalu banyak permintaan. Coba lagi sebentar.',
+        retryAfter: RATE_WINDOW
+      }, 429, {
+        'Retry-After': String(RATE_WINDOW)
+      });
     }
 
     await env.CACHE.put(
@@ -122,66 +52,42 @@ export default {
         count: rate.count + 1
       }),
       {
-        expirationTtl:
-          RATE_WINDOW
+        expirationTtl: RATE_WINDOW
       }
     );
 
-    // ==================================================
-    // ROUTES
-    // ==================================================
-
     try {
 
-      // =================================================
+      // =========================
       // SEARCH
-      // =================================================
+      // =========================
 
       if (u.pathname === '/api/search') {
 
         const q =
-          (u.searchParams.get('q') || '')
-            .trim();
+          (u.searchParams.get('q') || '').trim();
 
         const region =
-          (
-            u.searchParams.get('region') ||
-            'ID'
-          )
+          (u.searchParams.get('region') || 'ID')
             .toUpperCase();
 
         if (!q) {
-          return json(
-            {
-              error:
-                'Keyword kosong.'
-            },
-            400
-          );
+          return json({
+            error: 'Keyword kosong.'
+          }, 400);
         }
 
         if (q.length > 200) {
-          return json(
-            {
-              error:
-                'Keyword terlalu panjang.'
-            },
-            400
-          );
+          return json({
+            error: 'Keyword terlalu panjang.'
+          }, 400);
         }
 
         const cacheKey =
-          `v3:search:${region}:${await hashKey(q)}`;
-
-        // ---------------------------------------------
-        // ACTIVE CACHE
-        // ---------------------------------------------
+          `search:${region}:${await hashKey(q)}`;
 
         const cached =
-          await env.CACHE.get(
-            cacheKey,
-            'json'
-          );
+          await env.CACHE.get(cacheKey, 'json');
 
         if (cached) {
           return json({
@@ -190,18 +96,11 @@ export default {
           });
         }
 
-        // ---------------------------------------------
-        // STALE CACHE
-        // ---------------------------------------------
-
         const staleKey =
           `${cacheKey}:stale`;
 
         const stale =
-          await env.CACHE.get(
-            staleKey,
-            'json'
-          );
+          await env.CACHE.get(staleKey, 'json');
 
         if (stale) {
 
@@ -220,10 +119,6 @@ export default {
             cache: 'STALE'
           });
         }
-
-        // ---------------------------------------------
-        // FETCH YOUTUBE
-        // ---------------------------------------------
 
         const data =
           await fetchSearch(
@@ -246,33 +141,23 @@ export default {
         });
       }
 
-
-      // =================================================
+      // =========================
       // SINGLE VIDEO
-      // =================================================
+      // =========================
 
       if (u.pathname === '/api/video') {
 
         const id =
-          (
-            u.searchParams.get('id') ||
-            ''
-          ).trim();
+          (u.searchParams.get('id') || '').trim();
 
-        if (
-          !/^[A-Za-z0-9_-]{6,20}$/.test(id)
-        ) {
-          return json(
-            {
-              error:
-                'Video ID tidak valid.'
-            },
-            400
-          );
+        if (!/^[A-Za-z0-9_-]{6,20}$/.test(id)) {
+          return json({
+            error: 'Video ID tidak valid.'
+          }, 400);
         }
 
         const cacheKey =
-          `v3:video:${id}`;
+          `video:${id}`;
 
         const cached =
           await env.CACHE.get(
@@ -333,53 +218,24 @@ export default {
         });
       }
 
-
-      // =================================================
-      // HEALTH CHECK
-      // =================================================
-
-      if (u.pathname === '/api/health') {
-
-        return json({
-          status: 'ok',
-          version: '3.0',
-          service:
-            'YouTube SEO Booster',
-          timestamp:
-            new Date().toISOString()
-        });
-      }
-
-
-      // =================================================
-      // UNKNOWN ENDPOINT
-      // =================================================
-
-      return json(
-        {
-          error:
-            'Endpoint tidak ditemukan.'
-        },
-        404
-      );
+      return json({
+        error: 'Endpoint tidak ditemukan.'
+      }, 404);
 
     } catch (e) {
 
-      return json(
-        {
-          error:
-            e?.message ||
-            'YouTube API error'
-        },
-        500
-      );
+      return json({
+        error:
+          e?.message ||
+          'YouTube API error'
+      }, 500);
     }
   }
 };
 
 
 // ======================================================
-// REFRESH SEARCH
+// CACHE REFRESH
 // ======================================================
 
 async function refreshSearch(
@@ -406,15 +262,9 @@ async function refreshSearch(
       SEARCH_TTL
     );
 
-  } catch (e) {
-    // stale tetap digunakan
-  }
+  } catch {}
 }
 
-
-// ======================================================
-// REFRESH VIDEO
-// ======================================================
 
 async function refreshVideo(
   env,
@@ -438,9 +288,7 @@ async function refreshVideo(
       VIDEO_TTL
     );
 
-  } catch (e) {
-    // stale tetap digunakan
-  }
+  } catch {}
 }
 
 
@@ -471,8 +319,7 @@ async function putCache(
     staleKey,
     body,
     {
-      expirationTtl:
-        STALE_TTL
+      expirationTtl: STALE_TTL
     }
   );
 }
@@ -503,25 +350,15 @@ async function fetchSearch(
       part: 'snippet',
       q,
       type: 'video',
-      maxResults:
-        String(MAX_RESULTS),
-      regionCode:
-        region,
-      relevanceLanguage:
-        'id',
-      order:
-        isLatest
-          ? 'date'
-          : 'relevance',
-      key:
-        env.YOUTUBE_API_KEY
+      maxResults: '25',
+      regionCode: region,
+      relevanceLanguage: 'id',
+      order: isLatest ? 'date' : 'relevance',
+      key: env.YOUTUBE_API_KEY
     });
 
   const search =
-    await yt(
-      '/search',
-      params
-    );
+    await yt('/search', params);
 
   const ids =
     search.items
@@ -529,14 +366,17 @@ async function fetchSearch(
         item =>
           item.id?.videoId
       )
-      .filter(Boolean)
-      .join(',');
+      .filter(Boolean);
 
-  if (!ids) {
-    return emptyResult(
-      q,
-      region
-    );
+  if (!ids.length) {
+    return {
+      keyword: q,
+      region,
+      totalResults: 0,
+      analyzedAt: new Date().toISOString(),
+      market: emptyMarket(),
+      items: []
+    };
   }
 
   const details =
@@ -545,29 +385,22 @@ async function fetchSearch(
       new URLSearchParams({
         part:
           'snippet,statistics,contentDetails',
-        id: ids,
-        key:
-          env.YOUTUBE_API_KEY
+        id: ids.join(','),
+        key: env.YOUTUBE_API_KEY
       })
     );
 
-  const items =
-    details.items.map(
-      normalize
-    );
+  let items =
+    details.items.map(normalize);
 
-  // ==================================================
-  // ANALYZE
-  // ==================================================
-
-  const scored =
+  // Analisis setiap video
+  items =
     items.map(video => {
 
       const analysis =
         analyzeVideo(
           video,
-          q,
-          items
+          q
         );
 
       return {
@@ -576,14 +409,39 @@ async function fetchSearch(
       };
     });
 
-  // ==================================================
-  // SORT
-  // ==================================================
+  // Market
+  const market =
+    analyzeMarket(
+      items,
+      q
+    );
 
-  if (isLatest) {
+  // Opportunity
+  items =
+    items.map(video => {
 
-    scored.sort(
-      (a, b) => {
+      const opportunity =
+        calculateOpportunity(
+          video,
+          market
+        );
+
+      return {
+        ...video,
+        opportunityScore:
+          opportunity.score,
+        opportunityLabel:
+          opportunity.label,
+        opportunityReason:
+          opportunity.reason
+      };
+    });
+
+  // Sorting
+  items.sort(
+    (a, b) => {
+
+      if (isLatest) {
 
         const dateA =
           new Date(
@@ -595,54 +453,51 @@ async function fetchSearch(
             b.publishedAt
           ).getTime();
 
-        if (
-          dateB !== dateA
-        ) {
+        if (dateB !== dateA) {
           return dateB - dateA;
         }
-
-        return (
-          b.opportunityScore -
-          a.opportunityScore
-        );
       }
-    );
 
-  } else {
-
-    scored.sort(
-      (a, b) =>
+      return (
         b.opportunityScore -
         a.opportunityScore
-    );
-  }
+      );
+    }
+  );
 
-  // ==================================================
-  // MARKET ANALYSIS
-  // ==================================================
-
-  const market =
-    analyzeMarket(
-      scored,
+  const keywordOpportunity =
+    calculateKeywordOpportunity(
+      market,
       q
     );
 
   return {
-    version: '3.0',
 
     keyword: q,
 
     region,
 
+    totalResults:
+      items.length,
+
     analyzedAt:
       new Date().toISOString(),
 
-    totalResults:
-      scored.length,
+    market: {
 
-    market,
+      ...market,
 
-    items: scored
+      opportunityScore:
+        keywordOpportunity.score,
+
+      opportunityLabel:
+        keywordOpportunity.label,
+
+      recommendation:
+        keywordOpportunity.recommendation
+    },
+
+    items
   };
 }
 
@@ -663,35 +518,21 @@ async function fetchVideo(
         part:
           'snippet,statistics,contentDetails',
         id,
-        key:
-          env.YOUTUBE_API_KEY
+        key: env.YOUTUBE_API_KEY
       })
     );
 
-  if (
-    !details.items.length
-  ) {
+  if (!details.items.length) {
     throw new Error(
       'Video tidak ditemukan.'
     );
   }
 
-  const video =
-    normalize(
-      details.items[0]
-    );
-
   return {
-    version: '3.0',
-
-    item: {
-      ...video,
-      ...analyzeVideo(
-        video,
-        video.title,
-        [video]
+    item:
+      normalize(
+        details.items[0]
       )
-    }
   };
 }
 
@@ -714,7 +555,6 @@ async function yt(
     await response.json();
 
   if (!response.ok) {
-
     throw new Error(
       data?.error?.message ||
       'YouTube API request gagal'
@@ -759,6 +599,9 @@ function normalize(v) {
     channelTitle:
       snippet.channelTitle || '',
 
+    channelId:
+      snippet.channelId || '',
+
     publishedAt,
 
     views:
@@ -787,116 +630,24 @@ function normalize(v) {
       thumbnails.high?.url ||
       thumbnails.medium?.url ||
       thumbnails.default?.url ||
-      ''
+      '',
+
+    duration:
+      v.contentDetails?.duration || '',
+
+    ageHours:
+      calculateAgeHours(
+        publishedAt
+      )
   };
 }
 
 
 // ======================================================
-// ANALYZE VIDEO
+// VIDEO ANALYSIS
 // ======================================================
 
 function analyzeVideo(
-  video,
-  keyword,
-  competitors
-) {
-
-  const relevance =
-    calculateRelevance(
-      video,
-      keyword
-    );
-
-  const engagement =
-    calculateEngagement(
-      video
-    );
-
-  const freshness =
-    calculateFreshness(
-      video.publishedAt
-    );
-
-  const competition =
-    calculateCompetition(
-      video,
-      competitors
-    );
-
-  const seo =
-    calculateSEOScore(
-      video,
-      keyword
-    );
-
-  // Opportunity:
-  // relevansi tinggi
-  // + engagement
-  // + freshness
-  // + kompetisi rendah
-
-  const opportunity =
-    Math.round(
-      (
-        relevance * 0.35
-      ) +
-      (
-        engagement * 0.15
-      ) +
-      (
-        freshness * 0.15
-      ) +
-      (
-        (100 - competition) * 0.25
-      ) +
-      (
-        seo * 0.10
-      )
-    );
-
-  return {
-
-    seoScore:
-      seo,
-
-    relevanceScore:
-      relevance,
-
-    engagementScore:
-      engagement,
-
-    freshnessScore:
-      freshness,
-
-    competitionScore:
-      competition,
-
-    opportunityScore:
-      clamp(
-        opportunity,
-        0,
-        100
-      ),
-
-    opportunityLabel:
-      opportunityLabel(
-        opportunity
-      ),
-
-    age:
-      formatAge(
-        video.publishedAt
-      )
-  };
-}
-
-
-// ======================================================
-// RELEVANCE
-// ======================================================
-
-function calculateRelevance(
   video,
   keyword
 ) {
@@ -918,20 +669,137 @@ function calculateRelevance(
           word.length > 1
       );
 
+  const relevance =
+    calculateRelevance(
+      title,
+      description,
+      q,
+      words
+    );
+
+  const titleScore =
+    calculateTitleScore(
+      title,
+      q,
+      words
+    );
+
+  const descriptionScore =
+    calculateDescriptionScore(
+      description,
+      q,
+      words
+    );
+
+  const velocity =
+    calculateViewVelocity(
+      video.views,
+      video.ageHours
+    );
+
+  const engagement =
+    calculateEngagement(
+      video.views,
+      video.likes,
+      video.comments
+    );
+
+  const freshness =
+    calculateFreshness(
+      video.ageHours
+    );
+
+  const tagsScore =
+    video.tags > 0
+      ? Math.min(
+          100,
+          35 +
+          Math.min(
+            65,
+            video.tags * 4
+          )
+        )
+      : 0;
+
+  const viewScore =
+    calculateViewScore(
+      video.views
+    );
+
+  const seoScore =
+    clamp(
+      Math.round(
+        relevance * 0.30 +
+        titleScore * 0.20 +
+        descriptionScore * 0.12 +
+        tagsScore * 0.08 +
+        engagement * 0.10 +
+        freshness * 0.05 +
+        velocity * 0.15
+      )
+    );
+
+  return {
+
+    relevanceScore:
+      relevance,
+
+    titleScore,
+
+    descriptionScore,
+
+    velocityScore:
+      velocity,
+
+    engagementScore:
+      engagement,
+
+    freshnessScore:
+      freshness,
+
+    tagsScore,
+
+    viewScore,
+
+    seoScore,
+
+    viewVelocity:
+      Math.round(
+        velocityValue(
+          video.views,
+          video.ageHours
+        )
+      ),
+
+    age:
+      formatAge(
+        video.ageHours
+      )
+  };
+}
+
+
+// ======================================================
+// RELEVANCE
+// ======================================================
+
+function calculateRelevance(
+  title,
+  description,
+  q,
+  words
+) {
+
   if (!words.length) {
     return 0;
   }
 
   let score = 0;
 
-  // Exact phrase title
-  if (
-    title.includes(q)
-  ) {
+  if (title.includes(q)) {
     score += 60;
   }
 
-  // Individual title words
   const titleMatches =
     words.filter(
       word =>
@@ -939,32 +807,163 @@ function calculateRelevance(
     ).length;
 
   score +=
-    (
-      titleMatches /
-      words.length
-    ) * 25;
+    (titleMatches / words.length) *
+    25;
 
-  // Description
-  const descriptionMatches =
+  if (description.includes(q)) {
+    score += 10;
+  } else {
+
+    const descMatches =
+      words.filter(
+        word =>
+          description.includes(word)
+      ).length;
+
+    score +=
+      (descMatches / words.length) *
+      5;
+  }
+
+  return clamp(
+    Math.round(score)
+  );
+}
+
+
+// ======================================================
+// TITLE SCORE
+// ======================================================
+
+function calculateTitleScore(
+  title,
+  q,
+  words
+) {
+
+  let score = 0;
+
+  if (title.includes(q)) {
+    score += 65;
+  }
+
+  const matches =
     words.filter(
       word =>
-        description.includes(
-          word
-        )
+        title.includes(word)
     ).length;
 
-  score +=
-    (
-      descriptionMatches /
-      words.length
-    ) * 15;
+  if (words.length) {
 
-  return Math.round(
-    clamp(
-      score,
-      0,
-      100
+    score +=
+      (
+        matches /
+        words.length
+      ) * 25;
+  }
+
+  if (
+    title.length >= 25 &&
+    title.length <= 75
+  ) {
+    score += 10;
+  }
+
+  return clamp(
+    Math.round(score)
+  );
+}
+
+
+// ======================================================
+// DESCRIPTION SCORE
+// ======================================================
+
+function calculateDescriptionScore(
+  description,
+  q,
+  words
+) {
+
+  if (!description) {
+    return 0;
+  }
+
+  let score = 0;
+
+  if (description.includes(q)) {
+    score += 60;
+  }
+
+  const matches =
+    words.filter(
+      word =>
+        description.includes(word)
+    ).length;
+
+  if (words.length) {
+
+    score +=
+      (
+        matches /
+        words.length
+      ) * 30;
+  }
+
+  if (description.length >= 150) {
+    score += 10;
+  }
+
+  return clamp(
+    Math.round(score)
+  );
+}
+
+
+// ======================================================
+// VIEW VELOCITY
+// ======================================================
+
+function calculateViewVelocity(
+  views,
+  ageHours
+) {
+
+  const velocity =
+    velocityValue(
+      views,
+      ageHours
+    );
+
+  return clamp(
+    Math.round(
+      normalizeLog(
+        velocity,
+        0.1,
+        100000
+      )
     )
+  );
+}
+
+
+function velocityValue(
+  views,
+  ageHours
+) {
+
+  const hours =
+    Math.max(
+      1,
+      Math.min(
+        ageHours || 1,
+        24 * 365
+      )
+    );
+
+  return (
+    Number(views || 0) /
+    hours
   );
 }
 
@@ -974,20 +973,14 @@ function calculateRelevance(
 // ======================================================
 
 function calculateEngagement(
-  video
+  views,
+  likes,
+  comments
 ) {
 
-  const views =
-    Math.max(
-      1,
-      Number(video.views || 0)
-    );
-
-  const likes =
-    Number(video.likes || 0);
-
-  const comments =
-    Number(video.comments || 0);
+  if (!views) {
+    return 0;
+  }
 
   const likeRate =
     likes / views;
@@ -995,58 +988,14 @@ function calculateEngagement(
   const commentRate =
     comments / views;
 
-  let score = 0;
-
-  // Like rate
-  if (
-    likeRate >= 0.10
-  ) {
-    score += 50;
-  } else if (
-    likeRate >= 0.05
-  ) {
-    score += 40;
-  } else if (
-    likeRate >= 0.02
-  ) {
-    score += 30;
-  } else if (
-    likeRate >= 0.01
-  ) {
-    score += 20;
-  } else if (
-    likeRate > 0
-  ) {
-    score += 10;
-  }
-
-  // Comment rate
-  if (
-    commentRate >= 0.02
-  ) {
-    score += 50;
-  } else if (
-    commentRate >= 0.01
-  ) {
-    score += 40;
-  } else if (
-    commentRate >= 0.005
-  ) {
-    score += 30;
-  } else if (
-    commentRate >= 0.001
-  ) {
-    score += 20;
-  } else if (
-    commentRate > 0
-  ) {
-    score += 10;
-  }
+  const score =
+    (
+      likeRate * 100 * 0.7 +
+      commentRate * 100 * 3 * 0.3
+    ) * 100;
 
   return clamp(
-    Math.round(score),
-    0,
-    100
+    Math.round(score)
   );
 }
 
@@ -1056,128 +1005,46 @@ function calculateEngagement(
 // ======================================================
 
 function calculateFreshness(
-  publishedAt
+  ageHours
 ) {
 
-  if (!publishedAt) {
-    return 0;
-  }
-
-  const published =
-    new Date(
-      publishedAt
-    ).getTime();
-
-  const now =
-    Date.now();
-
-  const days =
+  const hours =
     Math.max(
       0,
-      (
-        now - published
-      ) /
-      86400000
+      ageHours || 0
     );
 
-  if (days < 1) {
-    return 100;
-  }
-
-  if (days <= 3) {
-    return 95;
-  }
-
-  if (days <= 7) {
-    return 90;
-  }
-
-  if (days <= 14) {
-    return 80;
-  }
-
-  if (days <= 30) {
-    return 70;
-  }
-
-  if (days <= 90) {
-    return 55;
-  }
-
-  if (days <= 180) {
-    return 40;
-  }
-
-  if (days <= 365) {
-    return 25;
-  }
+  if (hours <= 24) return 100;
+  if (hours <= 72) return 90;
+  if (hours <= 168) return 80;
+  if (hours <= 720) return 65;
+  if (hours <= 2160) return 45;
+  if (hours <= 4320) return 30;
 
   return 15;
 }
 
 
 // ======================================================
-// COMPETITION
+// VIEW SCORE
 // ======================================================
 
-function calculateCompetition(
-  video,
-  competitors
+function calculateViewScore(
+  views
 ) {
 
-  if (
-    !competitors ||
-    competitors.length <= 1
-  ) {
-    return 50;
+  if (!views) {
+    return 0;
   }
 
-  const views =
-    Number(
-      video.views || 0
-    );
-
-  const viewValues =
-    competitors
-      .map(
-        item =>
-          Number(
-            item.views || 0
-          )
-      )
-      .sort(
-        (a, b) => a - b
-      );
-
-  const index =
-    viewValues.findIndex(
-      value =>
-        value >= views
-    );
-
-  let percentile = 50;
-
-  if (index >= 0) {
-
-    percentile =
-      (
-        index /
-        Math.max(
-          1,
-          viewValues.length - 1
-        )
-      ) * 100;
-
-  }
-
-  // Lebih banyak views
-  // = kompetisi lebih kuat
   return clamp(
     Math.round(
-      percentile
-    ),
-    0,
-    100
+      normalizeLog(
+        views,
+        10,
+        10000000
+      )
+    )
   );
 }
 
@@ -1187,303 +1054,260 @@ function calculateCompetition(
 // ======================================================
 
 function analyzeMarket(
-  items,
-  keyword
+  items
 ) {
 
   if (!items.length) {
-
-    return {
-      competitionScore: 0,
-      opportunityScore: 0,
-      averageViews: 0,
-      medianViews: 0,
-      averageSEO: 0,
-      averageRelevance: 0,
-      level: 'Tidak ada data'
-    };
+    return emptyMarket();
   }
 
   const views =
-    items
-      .map(
-        item =>
-          Number(
-            item.views || 0
-          )
-      )
-      .sort(
-        (a, b) =>
-          a - b
-      );
-
-  const averageViews =
-    Math.round(
-      views.reduce(
-        (sum, value) =>
-          sum + value,
-        0
-      ) /
-      views.length
+    items.map(
+      x => x.views || 0
     );
+
+  const seo =
+    items.map(
+      x => x.seoScore || 0
+    );
+
+  const relevance =
+    items.map(
+      x => x.relevanceScore || 0
+    );
+
+  const velocity =
+    items.map(
+      x => x.velocityScore || 0
+    );
+
+  const engagement =
+    items.map(
+      x => x.engagementScore || 0
+    );
+
+  const avgViews =
+    average(views);
 
   const medianViews =
-    views[
-      Math.floor(
-        views.length / 2
-      )
-    ] || 0;
+    median(views);
 
   const averageSEO =
-    Math.round(
-      average(
-        items.map(
-          item =>
-            item.seoScore
-        )
-      )
-    );
+    average(seo);
 
   const averageRelevance =
-    Math.round(
-      average(
-        items.map(
-          item =>
-            item.relevanceScore
-        )
+    average(relevance);
+
+  const averageVelocity =
+    average(velocity);
+
+  const averageEngagement =
+    average(engagement);
+
+  const viewStrength =
+    normalizeLog(
+      medianViews,
+      10,
+      1000000
+    );
+
+  const competitionScore =
+    clamp(
+      Math.round(
+        viewStrength * 0.40 +
+        averageSEO * 0.25 +
+        averageVelocity * 0.20 +
+        averageEngagement * 0.15
       )
     );
 
-  const averageCompetition =
-    Math.round(
-      average(
-        items.map(
-          item =>
-            item.competitionScore
-        )
-      )
-    );
+  let level = 'Rendah';
 
-  const averageOpportunity =
-    Math.round(
-      average(
-        items.map(
-          item =>
-            item.opportunityScore
-        )
-      )
-    );
+  if (competitionScore >= 70) {
+    level = 'Tinggi';
+  } else if (competitionScore >= 45) {
+    level = 'Sedang';
+  }
 
   return {
 
-    keyword,
+    averageViews:
+      Math.round(avgViews),
 
-    competitionScore:
-      averageCompetition,
+    medianViews:
+      Math.round(medianViews),
 
-    opportunityScore:
-      averageOpportunity,
+    averageSEO:
+      Math.round(averageSEO),
 
-    averageViews,
+    averageRelevance:
+      Math.round(averageRelevance),
 
-    medianViews,
+    averageVelocity:
+      Math.round(averageVelocity),
 
-    averageSEO,
+    averageEngagement:
+      Math.round(averageEngagement),
 
-    averageRelevance,
+    competitionScore,
 
-    level:
-      competitionLabel(
-        averageCompetition
-      )
+    level
   };
 }
 
 
 // ======================================================
-// SEO SCORE
+// VIDEO OPPORTUNITY
 // ======================================================
 
-function calculateSEOScore(
+function calculateOpportunity(
   video,
-  keyword
+  market
 ) {
 
-  const title =
-    video.title.toLowerCase();
+  const competitorWeakness =
+    100 -
+    market.competitionScore;
 
-  const description =
-    video.description.toLowerCase();
+  const videoStrength =
+    video.seoScore * 0.35 +
+    video.velocityScore * 0.30 +
+    video.engagementScore * 0.20 +
+    video.viewScore * 0.15;
 
-  const q =
-    keyword.toLowerCase();
+  const videoWeakness =
+    100 -
+    videoStrength;
 
-  const words =
-    q
-      .split(/\s+/)
-      .filter(Boolean);
-
-  let score = 0;
-
-  // Title
-  if (
-    title.includes(q)
-  ) {
-
-    score += 40;
-
-  } else {
-
-    const matched =
-      words.filter(
-        word =>
-          title.includes(word)
-      ).length;
-
-    if (words.length) {
-
-      score +=
-        (
-          matched /
-          words.length
-        ) * 30;
-
-    }
-  }
-
-  // Description
-  if (
-    description.includes(q)
-  ) {
-
-    score += 20;
-
-  } else {
-
-    const matched =
-      words.filter(
-        word =>
-          description.includes(
-            word
-          )
-      ).length;
-
-    if (words.length) {
-
-      score +=
-        (
-          matched /
-          words.length
-        ) * 10;
-
-    }
-  }
-
-  // Views
-  const views =
-    Number(
-      video.views || 0
+  const score =
+    clamp(
+      Math.round(
+        video.relevanceScore * 0.30 +
+        competitorWeakness * 0.35 +
+        videoWeakness * 0.25 +
+        video.freshnessScore * 0.10
+      )
     );
 
-  if (
-    views >= 1000000
-  ) {
-    score += 10;
-  } else if (
-    views >= 100000
-  ) {
-    score += 8;
-  } else if (
-    views >= 10000
-  ) {
-    score += 6;
-  } else if (
-    views >= 1000
-  ) {
-    score += 4;
-  } else if (
-    views > 0
-  ) {
-    score += 2;
-  }
-
-  // Engagement
-  if (
-    Number(video.likes || 0) > 0
-  ) {
-    score += 2;
-  }
-
-  if (
-    Number(video.comments || 0) > 0
-  ) {
-    score += 2;
-  }
-
-  // Tags
-  if (
-    Number(video.tags || 0) > 0
-  ) {
-    score += 4;
-  }
-
-  return clamp(
-    Math.round(score),
-    0,
-    100
-  );
-}
-
-
-// ======================================================
-// LABELS
-// ======================================================
-
-function opportunityLabel(
-  score
-) {
-
-  if (score >= 85) {
-    return 'Sangat Bagus';
-  }
-
-  if (score >= 70) {
-    return 'Bagus';
-  }
-
-  if (score >= 50) {
-    return 'Sedang';
-  }
-
-  if (score >= 30) {
-    return 'Rendah';
-  }
-
-  return 'Sangat Rendah';
-}
-
-
-function competitionLabel(
-  score
-) {
+  let label = 'Sangat Sulit';
 
   if (score >= 80) {
-    return 'Sangat Tinggi';
+    label = 'Peluang Tinggi';
+  } else if (score >= 65) {
+    label = 'Layak Dicoba';
+  } else if (score >= 50) {
+    label = 'Sedang';
+  } else if (score >= 35) {
+    label = 'Rendah';
   }
 
-  if (score >= 60) {
-    return 'Tinggi';
+  let reason =
+    'Kompetisi relatif kuat.';
+
+  if (score >= 80) {
+    reason =
+      'Kompetitor relatif lemah dan keyword cukup relevan.';
+ } else if (score >= 65) {
+    reason =
+      'Masih ada celah untuk membuat video yang lebih optimal.';
+  } else if (score >= 50) {
+    reason =
+      'Peluang ada, tetapi perlu optimasi judul dan konten.';
   }
 
-  if (score >= 40) {
-    return 'Sedang';
+  return {
+    score,
+    label,
+    reason
+  };
+}
+
+
+// ======================================================
+// KEYWORD OPPORTUNITY
+// ======================================================
+
+function calculateKeywordOpportunity(
+  market
+) {
+
+  const competition =
+    market.competitionScore;
+
+  const relevance =
+    market.averageRelevance;
+
+  const seo =
+    market.averageSEO;
+
+  const velocity =
+    market.averageVelocity;
+
+  const competitionOpportunity =
+    100 - competition;
+
+  const seoGap =
+    100 - seo;
+
+  const velocityGap =
+    100 - velocity;
+
+  const score =
+    clamp(
+      Math.round(
+        relevance * 0.35 +
+        competitionOpportunity * 0.35 +
+        seoGap * 0.20 +
+        velocityGap * 0.10
+      )
+    );
+
+  let label = 'Rendah';
+
+  let recommendation =
+    'Keyword ini cukup kompetitif.';
+
+  if (score >= 80) {
+
+    label = 'Sangat Bagus';
+
+    recommendation =
+      'Gas. Keyword menunjukkan peluang yang menarik.';
+
+  } else if (score >= 65) {
+
+    label = 'Bagus';
+
+    recommendation =
+      'Layak dibuat. Fokus pada judul, thumbnail dan retention.';
+
+  } else if (score >= 50) {
+
+    label = 'Sedang';
+
+    recommendation =
+      'Masih layak, tetapi perlu diferensiasi dari kompetitor.';
+
+  } else if (score >= 35) {
+
+    label = 'Rendah';
+
+    recommendation =
+      'Kompetisi cukup berat. Pertimbangkan keyword turunan.';
+
+  } else {
+
+    label = 'Sangat Rendah';
+
+    recommendation =
+      'Cari keyword yang lebih spesifik atau long-tail.';
   }
 
-  if (score >= 20) {
-    return 'Rendah';
-  }
-
-  return 'Sangat Rendah';
+  return {
+    score,
+    label,
+    recommendation
+  };
 }
 
 
@@ -1491,64 +1315,62 @@ function competitionLabel(
 // AGE
 // ======================================================
 
-function formatAge(
+function calculateAgeHours(
   publishedAt
 ) {
 
   if (!publishedAt) {
-    return '-';
+    return 0;
   }
 
-  const published =
+  const time =
     new Date(
       publishedAt
     ).getTime();
 
-  const diff =
-    Math.max(
-      0,
-      Date.now() - published
-    );
+  if (!Number.isFinite(time)) {
+    return 0;
+  }
 
-  const minutes =
-    Math.floor(
-      diff / 60000
-    );
+  return Math.max(
+    0,
+    (
+      Date.now() -
+      time
+    ) / 3600000
+  );
+}
 
-  const hours =
-    Math.floor(
-      diff / 3600000
-    );
 
-  const days =
-    Math.floor(
-      diff / 86400000
-    );
+function formatAge(
+  hours
+) {
 
-  if (minutes < 60) {
+  if (!Number.isFinite(hours)) {
+    return '-';
+  }
 
-    if (minutes <= 1) {
-      return 'Baru saja';
-    }
-
-    return `${minutes} menit`;
+  if (hours < 1) {
+    return 'baru saja';
   }
 
   if (hours < 24) {
-
-    return `${hours} jam`;
+    return (
+      Math.floor(hours) +
+      ' jam'
+    );
   }
 
-  if (days === 0) {
-    return 'Hari ini';
-  }
-
-  if (days === 1) {
-    return '1 hari';
-  }
+  const days =
+    Math.floor(
+      hours / 24
+    );
 
   if (days < 30) {
-    return `${days} hari`;
+    return (
+      days +
+      ' hari'
+    );
   }
 
   const months =
@@ -1557,52 +1379,18 @@ function formatAge(
     );
 
   if (months < 12) {
-    return `${months} bulan`;
+    return (
+      months +
+      ' bulan'
+    );
   }
 
-  const years =
+  return (
     Math.floor(
-      days / 365
-    );
-
-  return `${years} tahun`;
-}
-
-
-// ======================================================
-// EMPTY RESULT
-// ======================================================
-
-function emptyResult(
-  q,
-  region
-) {
-
-  return {
-
-    version: '3.0',
-
-    keyword: q,
-
-    region,
-
-    analyzedAt:
-      new Date().toISOString(),
-
-    totalResults: 0,
-
-    market: {
-      competitionScore: 0,
-      opportunityScore: 0,
-      averageViews: 0,
-      medianViews: 0,
-      averageSEO: 0,
-      averageRelevance: 0,
-      level: 'Tidak ada data'
-    },
-
-    items: []
-  };
+      months / 12
+    ) +
+    ' tahun'
+  );
 }
 
 
@@ -1610,55 +1398,131 @@ function emptyResult(
 // HELPERS
 // ======================================================
 
-function average(
-  values
-) {
+function average(arr) {
 
-  if (
-    !values.length
-  ) {
+  if (!arr.length) {
     return 0;
   }
 
   return (
-    values.reduce(
-      (a, b) =>
-        a + Number(b || 0),
+    arr.reduce(
+      (a, b) => a + b,
       0
+    ) / arr.length
+  );
+}
+
+
+function median(arr) {
+
+  if (!arr.length) {
+    return 0;
+  }
+
+  const sorted =
+    [...arr].sort(
+      (a, b) => a - b
+    );
+
+  const middle =
+    Math.floor(
+      sorted.length / 2
+    );
+
+  if (sorted.length % 2) {
+    return sorted[middle];
+  }
+
+  return (
+    (
+      sorted[middle - 1] +
+      sorted[middle]
+    ) / 2
+  );
+}
+
+
+function normalizeLog(
+  value,
+  min,
+  max
+) {
+
+  value =
+    Math.max(
+      min,
+      Math.min(
+        max,
+        Number(value || 0)
+      )
+    );
+
+  const result =
+    (
+      Math.log10(value) -
+      Math.log10(min)
     ) /
-    values.length
+    (
+      Math.log10(max) -
+      Math.log10(min)
+    );
+
+  return clamp(
+    Math.round(
+      result * 100
+    )
   );
 }
 
 
 function clamp(
   value,
-  min,
-  max
+  min = 0,
+  max = 100
 ) {
 
   return Math.max(
     min,
     Math.min(
       max,
-      value
+      Number(value) || 0
     )
   );
 }
 
 
+function emptyMarket() {
+
+  return {
+
+    averageViews: 0,
+
+    medianViews: 0,
+
+    averageSEO: 0,
+
+    averageRelevance: 0,
+
+    averageVelocity: 0,
+
+    averageEngagement: 0,
+
+    competitionScore: 0,
+
+    level: 'Tidak ada data'
+  };
+}
+
+
 // ======================================================
-// SHA-256 CACHE KEY
+// SHA256
 // ======================================================
 
-async function hashKey(
-  s
-) {
+async function hashKey(s) {
 
   const bytes =
-    new TextEncoder().encode(
-      s
-    );
+    new TextEncoder()
+      .encode(s);
 
   const digest =
     await crypto.subtle.digest(
