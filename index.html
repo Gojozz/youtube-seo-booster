@@ -1,180 +1,366 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>YouTube SEO Booster V3</title>
-<meta name="description" content="Analisis keyword, kompetitor, SEO dan peluang video YouTube.">
-<link rel="stylesheet" href="/style.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <meta name="theme-color" content="#08090d">
+  <title>YouTube SEO Booster</title>
+  <link rel="stylesheet" href="/style.css">
 </head>
+
 <body>
 
-<div class="app">
+<header class="hero">
 
-<header class="topbar">
-  <div class="brand">
-    <div class="logo">▶</div>
-    <div>
-      <h1>YouTube SEO Booster</h1>
-      <span>V3 • Keyword & Competition Analyzer</span>
-    </div>
+  <div class="eyebrow">
+    YOUTUBE SEO BOOSTER
   </div>
 
-  <div class="status">
-    <i></i> API Online
-  </div>
-</header>
-
-<main>
-
-<section class="hero">
-  <div class="eyebrow">YOUTUBE SEO ANALYZER</div>
-
-  <h2>
-    Temukan keyword dengan
-    <strong>peluang terbaik.</strong>
-  </h2>
+  <h1>
+    Temukan peluang<br>
+    <span>YouTube terbaik.</span>
+  </h1>
 
   <p>
-    Analisis relevansi, kompetisi, views, freshness
-    dan peluang SEO video YouTube.
+    Analisis keyword, kompetitor dan video YouTube
+    untuk menemukan peluang optimasi.
   </p>
 
-  <div class="searchbox">
+</header>
 
-    <div class="inputwrap">
-      <span>⌕</span>
-      <input
-        id="keyword"
-        maxlength="200"
-        placeholder="Contoh: cara menanam timun"
-        autocomplete="off"
+
+<main class="container">
+
+
+  <!-- ================================================= -->
+  <!-- KEYWORD -->
+  <!-- ================================================= -->
+
+  <section class="panel">
+
+    <div class="section-title">
+      <span>01</span>
+      ANALISIS KEYWORD
+    </div>
+
+    <div class="input-box">
+
+      <div class="field">
+        <label>Keyword YouTube</label>
+
+        <input
+          id="keyword"
+          type="text"
+          placeholder="Contoh: DJ remix tiktok viral 2026"
+          autocomplete="off"
+        >
+      </div>
+
+      <div class="field">
+        <label>Negara</label>
+
+        <select id="region">
+          <option value="ID">🇮🇩 Indonesia</option>
+          <option value="MY">🇲🇾 Malaysia</option>
+          <option value="SG">🇸🇬 Singapore</option>
+          <option value="US">🇺🇸 United States</option>
+        </select>
+      </div>
+
+      <button id="searchBtn" class="primary">
+        Analisis Keyword
+      </button>
+
+    </div>
+
+    <div id="searchLoading" class="loading hidden">
+      Menganalisis 25 video YouTube...
+    </div>
+
+    <div id="searchError" class="error hidden"></div>
+
+    <div id="keywordResult" class="hidden">
+
+      <div class="score-grid">
+
+        <div class="metric accent">
+          <small>Peluang SEO</small>
+          <strong id="opportunityScore">-</strong>
+          <span id="opportunityLabel">-</span>
+        </div>
+
+        <div class="metric">
+          <small>Kompetisi</small>
+          <strong id="competitionScore">-</strong>
+          <span id="competitionLabel">-</span>
+        </div>
+
+        <div class="metric">
+          <small>Relevansi</small>
+          <strong id="relevanceScore">-</strong>
+          <span>Keyword Match</span>
+        </div>
+
+        <div class="metric">
+          <small>Median Views</small>
+          <strong id="medianViews">-</strong>
+          <span>Video pesaing</span>
+        </div>
+
+      </div>
+
+
+      <div class="market">
+
+        <div class="section-title">
+          MARKET SNAPSHOT
+        </div>
+
+        <h2>Gambaran kompetisi keyword</h2>
+
+        <div class="market-grid">
+
+          <div>
+            <small>Median Views</small>
+            <b id="marketMedian">-</b>
+          </div>
+
+          <div>
+            <small>Average SEO</small>
+            <b id="marketSEO">-</b>
+          </div>
+
+          <div>
+            <small>Average Relevansi</small>
+            <b id="marketRelevance">-</b>
+          </div>
+
+          <div>
+            <small>Video Dianalisis</small>
+            <b id="videoCount">-</b>
+          </div>
+
+        </div>
+
+        <div class="recommendation" id="keywordRecommendation"></div>
+
+      </div>
+
+
+      <div class="competitors">
+
+        <div class="section-title">
+          COMPETITOR ANALYSIS
+        </div>
+
+        <h2>Video yang ditemukan</h2>
+
+        <div id="competitorList"></div>
+
+      </div>
+
+    </div>
+
+  </section>
+
+
+
+  <!-- ================================================= -->
+  <!-- VIDEO ANALYSIS -->
+  <!-- ================================================= -->
+
+  <section class="panel video-panel">
+
+    <div class="section-title">
+      <span>02</span>
+      ANALISIS VIDEO YOUTUBE
+    </div>
+
+    <h2>
+      Cek kesehatan SEO video kamu
+    </h2>
+
+    <p class="muted">
+      Masukkan link video YouTube untuk mendapatkan
+      penilaian dan saran perbaikan.
+    </p>
+
+    <div class="input-box">
+
+      <div class="field">
+
+        <label>URL Video YouTube</label>
+
+        <input
+          id="videoUrl"
+          type="text"
+          placeholder="https://www.youtube.com/watch?v=..."
+          autocomplete="off"
+        >
+
+      </div>
+
+      <div class="field">
+
+        <label>Keyword target <em>(opsional)</em></label>
+
+        <input
+          id="videoKeyword"
+          type="text"
+          placeholder="Contoh: DJ remix viral 2026"
+          autocomplete="off"
+        >
+
+      </div>
+
+      <button
+        id="videoBtn"
+        class="primary"
       >
-      <button id="clear">×</button>
+        Analisis Video
+      </button>
+
     </div>
 
-    <select id="region">
-      <option value="ID">🇮🇩 Indonesia</option>
-      <option value="US">🇺🇸 United States</option>
-      <option value="MY">🇲🇾 Malaysia</option>
-      <option value="SG">🇸🇬 Singapore</option>
-      <option value="GB">🇬🇧 United Kingdom</option>
-      <option value="AU">🇦🇺 Australia</option>
-    </select>
-
-    <button id="search">
-      <span id="searchText">Analisis Keyword</span>
-      <span id="loader"></span>
-    </button>
-
-  </div>
-</section>
-
-<div id="error" class="error hidden"></div>
-
-<section id="empty" class="empty">
-  <div class="emptyicon">⌕</div>
-  <h3>Mulai analisis keyword</h3>
-  <p>Masukkan keyword untuk melihat peluang SEO dan kompetisi YouTube.</p>
-</section>
-
-<section id="results" class="hidden">
-
-  <div class="heading">
-    <div>
-      <small>HASIL ANALISIS</small>
-      <h2 id="resultKeyword">-</h2>
-      <p id="resultMeta">-</p>
+    <div id="videoLoading" class="loading hidden">
+      Memeriksa video YouTube...
     </div>
 
-    <span id="cache">LIVE</span>
-  </div>
+    <div id="videoError" class="error hidden"></div>
 
-  <div class="scores">
+    <div id="videoResult" class="hidden">
 
-    <div class="score opportunity">
-      <label>Peluang SEO</label>
-      <b id="opportunity">0</b><em>/100</em>
-      <small id="opportunityLabel">-</small>
-    </div>
+      <div class="video-card">
 
-    <div class="score">
-      <label>Kompetisi</label>
-      <b id="competition">0</b><em>/100</em>
-      <small id="competitionLabel">-</small>
-    </div>
+        <img
+          id="videoThumb"
+          class="video-thumb"
+          src=""
+          alt=""
+        >
 
-    <div class="score">
-      <label>Relevansi</label>
-      <b id="relevance">0</b><em>/100</em>
-      <small>Keyword Match</small>
-    </div>
+        <div class="video-info">
 
-    <div class="score">
-      <label>Rata-rata Views</label>
-      <b id="averageViews">0</b>
-      <small>Video pesaing</small>
-    </div>
+          <div
+            id="videoSeoLabel"
+            class="badge"
+          >
+            -
+          </div>
 
-  </div>
+          <h3 id="videoTitle">-</h3>
 
-  <div class="market">
+          <p id="videoChannel">-</p>
 
-    <div class="markethead">
-      <div>
-        <small>MARKET SNAPSHOT</small>
-        <h3>Gambaran kompetisi keyword</h3>
-      </div>
-      <strong id="marketLevel">-</strong>
-    </div>
+        </div>
 
-    <div class="marketstats">
-
-      <div>
-        <span>Median Views</span>
-        <b id="medianViews">0</b>
       </div>
 
-      <div>
-        <span>Average SEO</span>
-        <b id="averageSEO">0</b>
+
+      <div class="score-grid video-scores">
+
+        <div class="metric accent">
+          <small>SEO Score</small>
+          <strong id="videoSeoScore">-</strong>
+          <span id="videoSeoText">-</span>
+        </div>
+
+        <div class="metric">
+          <small>Relevansi</small>
+          <strong id="videoRelevance">-</strong>
+          <span>Keyword Match</span>
+        </div>
+
+        <div class="metric">
+          <small>Title</small>
+          <strong id="videoTitleScore">-</strong>
+          <span>Optimasi judul</span>
+        </div>
+
+        <div class="metric">
+          <small>Description</small>
+          <strong id="videoDescriptionScore">-</strong>
+          <span>Optimasi deskripsi</span>
+        </div>
+
+        <div class="metric">
+          <small>Tags</small>
+          <strong id="videoTagsScore">-</strong>
+          <span>Metadata</span>
+        </div>
+
+        <div class="metric">
+          <small>Engagement</small>
+          <strong id="videoEngagement">-</strong>
+          <span>Interaksi</span>
+        </div>
+
+        <div class="metric">
+          <small>Views</small>
+          <strong id="videoViews">-</strong>
+          <span>Total views</span>
+        </div>
+
+        <div class="metric">
+          <small>Velocity</small>
+          <strong id="videoVelocity">-</strong>
+          <span>views/jam</span>
+        </div>
+
       </div>
 
-      <div>
-        <span>Average Relevance</span>
-        <b id="averageRelevance">0</b>
+
+      <div class="video-meta">
+
+        <div>
+          <small>Umur Video</small>
+          <b id="videoAge">-</b>
+        </div>
+
+        <div>
+          <small>Published</small>
+          <b id="videoPublished">-</b>
+        </div>
+
+        <div>
+          <small>Likes</small>
+          <b id="videoLikes">-</b>
+        </div>
+
+        <div>
+          <small>Comments</small>
+          <b id="videoComments">-</b>
+        </div>
+
       </div>
 
-      <div>
-        <span>Video Dianalisis</span>
-        <b id="totalResults">0</b>
+
+      <div class="suggestions">
+
+        <div class="section-title">
+          SEO RECOMMENDATION
+        </div>
+
+        <h2>
+          Yang harus diperbaiki
+        </h2>
+
+        <div id="suggestionList"></div>
+
       </div>
 
     </div>
-  </div>
 
-  <div class="videoshead">
-    <div>
-      <small>COMPETITOR ANALYSIS</small>
-      <h3>Video yang ditemukan</h3>
-    </div>
-
-    <span id="videoCount">0 video</span>
-  </div>
-
-  <div id="videos" class="videos"></div>
-
-</section>
+  </section>
 
 </main>
 
+
 <footer>
-  <span>YouTube SEO Booster V3</span>
-  <span>Powered by YouTube Data API</span>
+  YouTube SEO Booster
 </footer>
 
-</div>
-
 <script src="/app.js"></script>
+
 </body>
 </html>

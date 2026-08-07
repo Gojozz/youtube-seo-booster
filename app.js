@@ -1,404 +1,638 @@
-const $ = s => document.querySelector(s);
+const $ = id =>
+  document.getElementById(id);
 
-const keyword = $('#keyword');
-const region = $('#region');
-const searchBtn = $('#search');
-const clearBtn = $('#clear');
-const errorBox = $('#error');
-const empty = $('#empty');
-const results = $('#results');
-const videos = $('#videos');
 
-searchBtn.addEventListener('click', search);
+function show(el) {
+  el.classList.remove('hidden');
+}
 
-keyword.addEventListener('keydown', e => {
-  if (e.key === 'Enter') search();
-});
 
-clearBtn.addEventListener('click', () => {
-  keyword.value = '';
-  keyword.focus();
-  hideError();
-});
+function hide(el) {
+  el.classList.add('hidden');
+}
 
-async function search(){
 
-  const q = keyword.value.trim();
+function formatNumber(value) {
 
-  if(!q){
-    showError('Masukkan keyword terlebih dahulu.');
-    keyword.focus();
-    return;
-  }
+  const n =
+    Number(value || 0);
 
-  if(q.length > 200){
-    showError('Keyword terlalu panjang.');
-    return;
-  }
-
-  loading(true);
-  hideError();
-
-  try{
-
-    const url =
-      `/api/search?q=${encodeURIComponent(q)}&region=${encodeURIComponent(region.value)}`;
-
-    const response = await fetch(url);
-
-    const data = await response.json();
-
-    if(!response.ok){
-      throw new Error(
-        data?.error ||
-        'Gagal melakukan analisis.'
-      );
-    }
-
-    render(data);
-
-  }catch(e){
-
-    showError(
-      e?.message ||
-      'Terjadi kesalahan.'
+  if (n >= 1000000000) {
+    return (
+      (n / 1000000000)
+        .toFixed(1)
+        .replace('.0', '') +
+      'B'
     );
-
-  }finally{
-
-    loading(false);
-  }
-}
-
-function render(data){
-
-  empty.classList.add('hidden');
-  results.classList.remove('hidden');
-
-  const market = data.market || {};
-
-  $('#resultKeyword').textContent =
-    data.keyword || '-';
-
-  $('#resultMeta').textContent =
-    `${data.totalResults || 0} video dianalisis • ${formatDate(data.analyzedAt)}`;
-
-  $('#cache').textContent =
-    data.cache === 'HIT'
-      ? 'CACHE'
-      : data.cache === 'STALE'
-        ? 'STALE'
-        : 'LIVE';
-
-  $('#opportunity').textContent =
-    market.opportunityScore || 0;
-
-  $('#opportunityLabel').textContent =
-    opportunityLabel(
-      market.opportunityScore
-    );
-
-  $('#competition').textContent =
-    market.competitionScore || 0;
-
-  $('#competitionLabel').textContent =
-    market.level || '-';
-
-  $('#relevance').textContent =
-    market.averageRelevance || 0;
-
-  $('#averageViews').textContent =
-    formatNumber(
-      market.averageViews || 0
-    );
-
-  $('#marketLevel').textContent =
-    market.level || '-';
-
-  $('#medianViews').textContent =
-    formatNumber(
-      market.medianViews || 0
-    );
-
-  $('#averageSEO').textContent =
-    `${market.averageSEO || 0}/100`;
-
-  $('#averageRelevance').textContent =
-    `${market.averageRelevance || 0}/100`;
-
-  $('#totalResults').textContent =
-    data.totalResults || 0;
-
-  $('#videoCount').textContent =
-    `${data.items?.length || 0} video`;
-
-  renderVideos(
-    data.items || []
-  );
-
-  results.scrollIntoView({
-    behavior:'smooth',
-    block:'start'
-  });
-}
-
-function renderVideos(items){
-
-  videos.innerHTML = '';
-
-  if(!items.length){
-
-    videos.innerHTML = `
-      <div class="empty">
-        <div class="emptyicon">!</div>
-        <h3>Tidak ada video ditemukan</h3>
-        <p>Coba keyword lain.</p>
-      </div>
-    `;
-
-    return;
   }
 
-  items.forEach((video,index) => {
-
-    const el =
-      document.createElement('article');
-
-    el.className = 'video';
-
-    const title =
-      escape(video.title || 'Tanpa judul');
-
-    const channel =
-      escape(
-        video.channelTitle ||
-        'Channel tidak diketahui'
-      );
-
-    const thumb =
-      escapeAttr(video.thumb || '');
-
-    const id =
-      encodeURIComponent(
-        video.id || ''
-      );
-
-    const score =
-      Number(
-        video.opportunityScore || 0
-      );
-
-    el.innerHTML = `
-
-      <div class="thumb">
-
-        <img
-          src="${thumb}"
-          alt="${escapeAttr(title)}"
-          loading="lazy"
-          onerror="this.style.display='none'"
-        >
-
-        <div class="rank">
-          #${index + 1}
-        </div>
-
-      </div>
-
-      <div>
-
-        <div class="vtitle">
-          ${title}
-        </div>
-
-        <div class="channel">
-          ${channel}
-        </div>
-
-        <div class="meta">
-
-          <span class="pill">
-            👁 ${formatNumber(video.views)}
-          </span>
-
-          <span class="pill">
-            👍 ${formatNumber(video.likes)}
-          </span>
-
-          <span class="pill">
-            💬 ${formatNumber(video.comments)}
-          </span>
-
-          <span class="pill">
-            🕒 ${escape(video.age || '-')}
-          </span>
-
-        </div>
-
-      </div>
-
-      <div class="analysis">
-
-        <div>
-
-          <div class="oscore">
-            ${score}<small>/100</small>
-          </div>
-
-          <div class="badge">
-            ${escape(
-              video.opportunityLabel ||
-              opportunityLabel(score)
-            )}
-          </div>
-
-        </div>
-
-        <div class="metrics">
-
-          <div class="metric">
-            <span>SEO</span>
-            <b>${video.seoScore || 0}</b>
-          </div>
-
-          <div class="metric">
-            <span>RELEVANSI</span>
-            <b>${video.relevanceScore || 0}</b>
-          </div>
-
-          <div class="metric">
-            <span>ENGAGE</span>
-            <b>${video.engagementScore || 0}</b>
-          </div>
-
-          <div class="metric">
-            <span>FRESH</span>
-            <b>${video.freshnessScore || 0}</b>
-          </div>
-
-          <div class="metric">
-            <span>COMPETISI</span>
-            <b>${video.competitionScore || 0}</b>
-          </div>
-
-        </div>
-
-        <a
-          class="yt"
-          href="https://www.youtube.com/watch?v=${id}"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Buka YouTube ↗
-        </a>
-
-      </div>
-    `;
-
-    videos.appendChild(el);
-  });
-}
-
-function loading(state){
-
-  searchBtn.disabled = state;
-
-  if(state){
-
-    searchBtn.classList.add('loading');
-
-    $('#searchText').textContent =
-      'Menganalisis...';
-
-  }else{
-
-    searchBtn.classList.remove('loading');
-
-    $('#searchText').textContent =
-      'Analisis Keyword';
+  if (n >= 1000000) {
+    return (
+      (n / 1000000)
+        .toFixed(1)
+        .replace('.0', '') +
+      'M'
+    );
   }
-}
 
-function showError(message){
-
-  errorBox.textContent = message;
-
-  errorBox.classList.remove('hidden');
-}
-
-function hideError(){
-
-  errorBox.classList.add('hidden');
-
-  errorBox.textContent = '';
-}
-
-function formatNumber(value){
-
-  const n = Number(value || 0);
-
-  if(n >= 1000000000)
-    return (n/1000000000)
-      .toFixed(1)
-      .replace('.0','') + 'B';
-
-  if(n >= 1000000)
-    return (n/1000000)
-      .toFixed(1)
-      .replace('.0','') + 'M';
-
-  if(n >= 1000)
-    return (n/1000)
-      .toFixed(1)
-      .replace('.0','') + 'K';
+  if (n >= 1000) {
+    return (
+      (n / 1000)
+        .toFixed(1)
+        .replace('.0', '') +
+      'K'
+    );
+  }
 
   return n.toLocaleString('id-ID');
 }
 
-function formatDate(date){
 
-  if(!date) return '-';
+function scoreText(score) {
 
-  try{
+  score =
+    Number(score || 0);
 
-    return new Date(date)
-      .toLocaleString(
-        'id-ID',
-        {
-          dateStyle:'short',
-          timeStyle:'short'
-        }
+  if (score >= 80) return 'Sangat Bagus';
+  if (score >= 65) return 'Bagus';
+  if (score >= 50) return 'Sedang';
+  if (score >= 35) return 'Perlu diperbaiki';
+
+  return 'Rendah';
+}
+
+
+function escapeHtml(value) {
+
+  return String(value || '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
+
+
+// ========================================================
+// KEYWORD SEARCH
+// ========================================================
+
+$('searchBtn').addEventListener(
+  'click',
+  analyzeKeyword
+);
+
+
+$('keyword').addEventListener(
+  'keydown',
+  e => {
+
+    if (e.key === 'Enter') {
+      analyzeKeyword();
+    }
+
+  }
+);
+
+
+async function analyzeKeyword() {
+
+  const keyword =
+    $('keyword')
+      .value
+      .trim();
+
+  const region =
+    $('region').value;
+
+  if (!keyword) {
+
+    showError(
+      $('searchError'),
+      'Masukkan keyword terlebih dahulu.'
+    );
+
+    return;
+  }
+
+  hide($('searchError'));
+  show($('searchLoading'));
+  hide($('keywordResult'));
+
+  $('searchBtn').disabled = true;
+
+  try {
+
+    const response =
+      await fetch(
+        `/api/search?q=${encodeURIComponent(
+          keyword
+        )}&region=${encodeURIComponent(
+          region
+        )}`
       );
 
-  }catch{
+    const data =
+      await response.json();
 
-    return '-';
+    if (!response.ok) {
+      throw new Error(
+        data.error ||
+        'Analisis gagal.'
+      );
+    }
+
+    renderKeyword(
+      data
+    );
+
+  } catch (error) {
+
+    showError(
+      $('searchError'),
+      error.message
+    );
+
+  } finally {
+
+    hide($('searchLoading'));
+    $('searchBtn').disabled = false;
   }
 }
 
-function opportunityLabel(score){
 
-  score = Number(score || 0);
+function renderKeyword(data) {
 
-  if(score >= 85) return 'Sangat Bagus';
-  if(score >= 70) return 'Bagus';
-  if(score >= 50) return 'Sedang';
-  if(score >= 30) return 'Rendah';
+  const market =
+    data.market || {};
 
-  return 'Sangat Rendah';
+  $('opportunityScore').textContent =
+    `${market.opportunityScore ?? 0}/100`;
+
+  $('opportunityLabel').textContent =
+    market.opportunityLabel ||
+    scoreText(
+      market.opportunityScore
+    );
+
+  $('competitionScore').textContent =
+    `${market.competitionScore ?? 0}/100`;
+
+  $('competitionLabel').textContent =
+    market.level ||
+    '-';
+
+  $('relevanceScore').textContent =
+    `${market.averageRelevance ?? 0}/100`;
+
+  $('medianViews').textContent =
+    formatNumber(
+      market.medianViews
+    );
+
+  $('marketMedian').textContent =
+    formatNumber(
+      market.medianViews
+    );
+
+  $('marketSEO').textContent =
+    `${market.averageSEO ?? 0}/100`;
+
+  $('marketRelevance').textContent =
+    `${market.averageRelevance ?? 0}/100`;
+
+  $('videoCount').textContent =
+    data.totalResults || 0;
+
+  $('keywordRecommendation').textContent =
+    market.recommendation ||
+    'Belum ada rekomendasi.';
+
+  renderCompetitors(
+    data.items || []
+  );
+
+  show(
+    $('keywordResult')
+  );
 }
 
-function escape(value){
 
-  return String(value)
-    .replace(/&/g,'&amp;')
-    .replace(/</g,'&lt;')
-    .replace(/>/g,'&gt;')
-    .replace(/"/g,'&quot;')
-    .replace(/'/g,'&#039;');
+function renderCompetitors(items) {
+
+  const container =
+    $('competitorList');
+
+  if (!items.length) {
+
+    container.innerHTML =
+      '<div class="empty">Tidak ada video ditemukan.</div>';
+
+    return;
+  }
+
+  container.innerHTML =
+    items.map(
+      (video, index) => {
+
+        return `
+          <div class="competitor">
+
+            <div class="rank">
+              #${index + 1}
+            </div>
+
+            <img
+              src="${escapeHtml(video.thumb)}"
+              alt=""
+            >
+
+            <div class="competitor-body">
+
+              <h3>
+                ${escapeHtml(video.title)}
+              </h3>
+
+              <p>
+                ${escapeHtml(video.channelTitle)}
+              </p>
+
+              <div class="stats">
+
+                <span>
+                  👁 ${formatNumber(video.views)}
+                </span>
+
+                <span>
+                  ❤️ ${formatNumber(video.likes)}
+                </span>
+
+                <span>
+                  💬 ${formatNumber(video.comments)}
+                </span>
+
+                <span>
+                  🕐 ${escapeHtml(video.age)}
+                </span>
+
+              </div>
+
+            </div>
+
+            <div class="competitor-score">
+
+              <b>
+                ${video.opportunityScore ?? 0}
+              </b>
+
+              <span>
+                ${escapeHtml(
+                  video.opportunityLabel || '-'
+                )}
+              </span>
+
+            </div>
+
+          </div>
+        `;
+      }
+    )
+    .join('');
 }
 
-function escapeAttr(value){
 
-  return escape(value);
+// ========================================================
+// VIDEO URL
+// ========================================================
+
+$('videoBtn').addEventListener(
+  'click',
+  analyzeVideo
+);
+
+
+$('videoUrl').addEventListener(
+  'keydown',
+  e => {
+
+    if (e.key === 'Enter') {
+      analyzeVideo();
+    }
+
+  }
+);
+
+
+function extractVideoId(url) {
+
+  try {
+
+    const value =
+      url.trim();
+
+    if (
+      /^[A-Za-z0-9_-]{6,20}$/.test(
+        value
+      )
+    ) {
+      return value;
+    }
+
+    const parsed =
+      new URL(value);
+
+    if (
+      parsed.hostname
+        .replace('www.', '')
+        === 'youtu.be'
+    ) {
+
+      return parsed.pathname
+        .replace('/', '')
+        .split('/')[0];
+
+    }
+
+    if (
+      parsed.hostname
+        .replace('www.', '')
+        .endsWith('youtube.com')
+    ) {
+
+      const id =
+        parsed.searchParams.get(
+          'v'
+        );
+
+      if (id) {
+        return id;
+      }
+
+      const parts =
+        parsed.pathname
+          .split('/')
+          .filter(Boolean);
+
+      const index =
+        parts.indexOf('shorts');
+
+      if (
+        index >= 0 &&
+        parts[index + 1]
+      ) {
+        return parts[index + 1];
+      }
+
+      const embed =
+        parts.indexOf('embed');
+
+      if (
+        embed >= 0 &&
+        parts[embed + 1]
+      ) {
+        return parts[embed + 1];
+      }
+    }
+
+  } catch {}
+
+  return null;
+}
+
+
+async function analyzeVideo() {
+
+  const url =
+    $('videoUrl')
+      .value
+      .trim();
+
+  const keyword =
+    $('videoKeyword')
+      .value
+      .trim();
+
+  const id =
+    extractVideoId(url);
+
+  if (!id) {
+
+    showError(
+      $('videoError'),
+      'Link YouTube tidak valid.'
+    );
+
+    return;
+  }
+
+  hide($('videoError'));
+  show($('videoLoading'));
+  hide($('videoResult'));
+
+  $('videoBtn').disabled = true;
+
+  try {
+
+    const endpoint =
+      `/api/video?id=${encodeURIComponent(
+        id
+      )}&keyword=${encodeURIComponent(
+        keyword
+      )}`;
+
+    const response =
+      await fetch(
+        endpoint
+      );
+
+    const data =
+      await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        data.error ||
+        'Analisis video gagal.'
+      );
+    }
+
+    renderVideo(
+      data
+    );
+
+  } catch (error) {
+
+    showError(
+      $('videoError'),
+      error.message
+    );
+
+  } finally {
+
+    hide($('videoLoading'));
+    $('videoBtn').disabled = false;
+  }
+}
+
+
+function renderVideo(data) {
+
+  const item =
+    data.item || {};
+
+  const analysis =
+    data.analysis || {};
+
+  $('videoThumb').src =
+    item.thumb || '';
+
+  $('videoTitle').textContent =
+    item.title || '-';
+
+  $('videoChannel').textContent =
+    item.channelTitle || '-';
+
+  $('videoSeoScore').textContent =
+    `${analysis.seoScore ?? 0}/100`;
+
+  $('videoSeoText').textContent =
+    analysis.seoLabel ||
+    scoreText(
+      analysis.seoScore
+    );
+
+  $('videoSeoLabel').textContent =
+    analysis.seoLabel ||
+    scoreText(
+      analysis.seoScore
+    );
+
+  $('videoRelevance').textContent =
+    `${analysis.relevance ?? 0}`;
+
+  $('videoTitleScore').textContent =
+    `${analysis.title ?? 0}`;
+
+  $('videoDescriptionScore').textContent =
+    `${analysis.description ?? 0}`;
+
+  $('videoTagsScore').textContent =
+    `${analysis.tags ?? 0}`;
+
+  $('videoEngagement').textContent =
+    `${analysis.engagement ?? 0}`;
+
+  $('videoViews').textContent =
+    formatNumber(
+      analysis.views
+    );
+
+  $('videoVelocity').textContent =
+    `${formatNumber(
+      analysis.velocity
+    )}`;
+
+  $('videoAge').textContent =
+    analysis.age || item.age || '-';
+
+  $('videoPublished').textContent =
+    item.publishedAt
+      ? new Date(
+          item.publishedAt
+        ).toLocaleString(
+          'id-ID'
+        )
+      : '-';
+
+  $('videoLikes').textContent =
+    formatNumber(
+      item.likes
+    );
+
+  $('videoComments').textContent =
+    formatNumber(
+      item.comments
+    );
+
+  renderSuggestions(
+    data.suggestions ||
+    []
+  );
+
+  show(
+    $('videoResult')
+  );
+}
+
+
+function renderSuggestions(
+  suggestions
+) {
+
+  const container =
+    $('suggestionList');
+
+  if (!suggestions.length) {
+
+    container.innerHTML =
+      '<div class="empty">Tidak ada saran.</div>';
+
+    return;
+  }
+
+  container.innerHTML =
+    suggestions.map(
+      item => {
+
+        return `
+          <div class="suggestion ${escapeHtml(
+            item.type
+          )}">
+
+            <div class="suggestion-icon">
+              ${
+                item.type === 'success'
+                  ? '✓'
+                  : item.type === 'error'
+                    ? '!'
+                    : '•'
+              }
+            </div>
+
+            <div>
+
+              <strong>
+                ${escapeHtml(
+                  item.title
+                )}
+              </strong>
+
+              <p>
+                ${escapeHtml(
+                  item.text
+                )}
+              </p>
+
+            </div>
+
+          </div>
+        `;
+      }
+    )
+    .join('');
+}
+
+
+// ========================================================
+// ERROR
+// ========================================================
+
+function showError(
+  element,
+  message
+) {
+
+  element.textContent =
+    message;
+
+  show(element);
 }

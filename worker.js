@@ -33,9 +33,7 @@ export default {
     const rateKey = `rate:${ip}`;
 
     const rate =
-      await env.CACHE.get(rateKey, 'json') || {
-        count: 0
-      };
+      await env.CACHE.get(rateKey, 'json') || { count: 0 };
 
     if (rate.count >= RATE_LIMIT) {
       return json({
@@ -58,9 +56,9 @@ export default {
 
     try {
 
-      // =========================
+      // =====================================================
       // SEARCH
-      // =========================
+      // =====================================================
 
       if (u.pathname === '/api/search') {
 
@@ -103,7 +101,6 @@ export default {
           await env.CACHE.get(staleKey, 'json');
 
         if (stale) {
-
           ctx.waitUntil(
             refreshSearch(
               env,
@@ -141,14 +138,18 @@ export default {
         });
       }
 
-      // =========================
-      // SINGLE VIDEO
-      // =========================
+
+      // =====================================================
+      // VIDEO ANALYSIS
+      // =====================================================
 
       if (u.pathname === '/api/video') {
 
         const id =
           (u.searchParams.get('id') || '').trim();
+
+        const keyword =
+          (u.searchParams.get('keyword') || '').trim();
 
         if (!/^[A-Za-z0-9_-]{6,20}$/.test(id)) {
           return json({
@@ -157,7 +158,7 @@ export default {
         }
 
         const cacheKey =
-          `video:${id}`;
+          `video:${id}:${await hashKey(keyword || '-')}`;
 
         const cached =
           await env.CACHE.get(
@@ -182,13 +183,13 @@ export default {
           );
 
         if (stale) {
-
           ctx.waitUntil(
             refreshVideo(
               env,
               cacheKey,
               staleKey,
-              id
+              id,
+              keyword
             )
           );
 
@@ -201,7 +202,8 @@ export default {
         const data =
           await fetchVideo(
             env,
-            id
+            id,
+            keyword
           );
 
         await putCache(
@@ -217,6 +219,7 @@ export default {
           cache: 'MISS'
         });
       }
+
 
       return json({
         error: 'Endpoint tidak ditemukan.'
@@ -234,100 +237,9 @@ export default {
 };
 
 
-// ======================================================
-// CACHE REFRESH
-// ======================================================
-
-async function refreshSearch(
-  env,
-  cacheKey,
-  staleKey,
-  q,
-  region
-) {
-  try {
-
-    const data =
-      await fetchSearch(
-        env,
-        q,
-        region
-      );
-
-    await putCache(
-      env,
-      cacheKey,
-      staleKey,
-      data,
-      SEARCH_TTL
-    );
-
-  } catch {}
-}
-
-
-async function refreshVideo(
-  env,
-  cacheKey,
-  staleKey,
-  id
-) {
-  try {
-
-    const data =
-      await fetchVideo(
-        env,
-        id
-      );
-
-    await putCache(
-      env,
-      cacheKey,
-      staleKey,
-      data,
-      VIDEO_TTL
-    );
-
-  } catch {}
-}
-
-
-// ======================================================
-// CACHE
-// ======================================================
-
-async function putCache(
-  env,
-  key,
-  staleKey,
-  data,
-  ttl
-) {
-
-  const body =
-    JSON.stringify(data);
-
-  await env.CACHE.put(
-    key,
-    body,
-    {
-      expirationTtl: ttl
-    }
-  );
-
-  await env.CACHE.put(
-    staleKey,
-    body,
-    {
-      expirationTtl: STALE_TTL
-    }
-  );
-}
-
-
-// ======================================================
-// YOUTUBE SEARCH
-// ======================================================
+// =========================================================
+// SEARCH
+// =========================================================
 
 async function fetchSearch(
   env,
@@ -335,15 +247,15 @@ async function fetchSearch(
   region
 ) {
 
-  const lowerQ =
+  const lower =
     q.toLowerCase();
 
   const isLatest =
-    lowerQ.includes('terbaru') ||
-    lowerQ.includes('terkini') ||
-    lowerQ.includes('latest') ||
-    lowerQ.includes('new') ||
-    lowerQ.includes('2026');
+    lower.includes('terbaru') ||
+    lower.includes('terkini') ||
+    lower.includes('latest') ||
+    lower.includes('new') ||
+    lower.includes('2026');
 
   const params =
     new URLSearchParams({
@@ -393,7 +305,6 @@ async function fetchSearch(
   let items =
     details.items.map(normalize);
 
-  // Analisis setiap video
   items =
     items.map(video => {
 
@@ -409,14 +320,9 @@ async function fetchSearch(
       };
     });
 
-  // Market
   const market =
-    analyzeMarket(
-      items,
-      q
-    );
+    analyzeMarket(items);
 
-  // Opportunity
   items =
     items.map(video => {
 
@@ -437,38 +343,15 @@ async function fetchSearch(
       };
     });
 
-  // Sorting
   items.sort(
-    (a, b) => {
-
-      if (isLatest) {
-
-        const dateA =
-          new Date(
-            a.publishedAt
-          ).getTime();
-
-        const dateB =
-          new Date(
-            b.publishedAt
-          ).getTime();
-
-        if (dateB !== dateA) {
-          return dateB - dateA;
-        }
-      }
-
-      return (
-        b.opportunityScore -
-        a.opportunityScore
-      );
-    }
+    (a, b) =>
+      b.opportunityScore -
+      a.opportunityScore
   );
 
   const keywordOpportunity =
     calculateKeywordOpportunity(
-      market,
-      q
+      market
     );
 
   return {
@@ -502,13 +385,14 @@ async function fetchSearch(
 }
 
 
-// ======================================================
-// SINGLE VIDEO
-// ======================================================
+// =========================================================
+// VIDEO
+// =========================================================
 
 async function fetchVideo(
   env,
-  id
+  id,
+  keyword
 ) {
 
   const details =
@@ -524,64 +408,103 @@ async function fetchVideo(
 
   if (!details.items.length) {
     throw new Error(
-      'Video tidak ditemukan.'
+      'Video tidak ditemukan atau video tidak tersedia.'
     );
   }
 
+  const video =
+    normalize(
+      details.items[0]
+    );
+
+  const analysis =
+    analyzeVideo(
+      video,
+      keyword
+    );
+
+  const suggestions =
+    generateSuggestions(
+      video,
+      analysis,
+      keyword
+    );
+
   return {
-    item:
-      normalize(
-        details.items[0]
-      )
+
+    item: {
+      ...video,
+      ...analysis,
+      suggestions
+    },
+
+    analysis: {
+      seoScore:
+        analysis.seoScore,
+
+      seoLabel:
+        scoreLabel(
+          analysis.seoScore
+        ),
+
+      relevance:
+        analysis.relevanceScore,
+
+      title:
+        analysis.titleScore,
+
+      description:
+        analysis.descriptionScore,
+
+      tags:
+        analysis.tagsScore,
+
+      views:
+        video.views,
+
+      velocity:
+        analysis.viewVelocity,
+
+      engagement:
+        analysis.engagementScore,
+
+      freshness:
+        analysis.freshnessScore,
+
+      age:
+        video.age
+    },
+
+    suggestions,
+
+    analyzedAt:
+      new Date().toISOString()
   };
 }
 
 
-// ======================================================
-// YOUTUBE API
-// ======================================================
-
-async function yt(
-  path,
-  params
-) {
-
-  const response =
-    await fetch(
-      `${API}${path}?${params.toString()}`
-    );
-
-  const data =
-    await response.json();
-
-  if (!response.ok) {
-    throw new Error(
-      data?.error?.message ||
-      'YouTube API request gagal'
-    );
-  }
-
-  return data;
-}
-
-
-// ======================================================
+// =========================================================
 // NORMALIZE
-// ======================================================
+// =========================================================
 
 function normalize(v) {
 
-  const snippet =
+  const s =
     v.snippet || {};
 
-  const statistics =
+  const st =
     v.statistics || {};
 
   const thumbnails =
-    snippet.thumbnails || {};
+    s.thumbnails || {};
 
   const publishedAt =
-    snippet.publishedAt || '';
+    s.publishedAt || '';
+
+  const ageHours =
+    calculateAgeHours(
+      publishedAt
+    );
 
   return {
 
@@ -591,42 +514,41 @@ function normalize(v) {
         : v.id?.videoId || '',
 
     title:
-      snippet.title || '',
+      s.title || '',
 
     description:
-      snippet.description || '',
+      s.description || '',
 
     channelTitle:
-      snippet.channelTitle || '',
+      s.channelTitle || '',
 
     channelId:
-      snippet.channelId || '',
+      s.channelId || '',
 
     publishedAt,
 
     views:
       Number(
-        statistics.viewCount || 0
+        st.viewCount || 0
       ),
 
     likes:
       Number(
-        statistics.likeCount || 0
+        st.likeCount || 0
       ),
 
     comments:
       Number(
-        statistics.commentCount || 0
+        st.commentCount || 0
       ),
 
     tags:
-      Array.isArray(
-        snippet.tags
-      )
-        ? snippet.tags.length
+      Array.isArray(s.tags)
+        ? s.tags.length
         : 0,
 
     thumb:
+      thumbnails.maxres?.url ||
       thumbnails.high?.url ||
       thumbnails.medium?.url ||
       thumbnails.default?.url ||
@@ -635,17 +557,17 @@ function normalize(v) {
     duration:
       v.contentDetails?.duration || '',
 
-    ageHours:
-      calculateAgeHours(
-        publishedAt
-      )
+    ageHours,
+
+    age:
+      formatAge(ageHours)
   };
 }
 
 
-// ======================================================
-// VIDEO ANALYSIS
-// ======================================================
+// =========================================================
+// ANALYSIS
+// =========================================================
 
 function analyzeVideo(
   video,
@@ -659,23 +581,27 @@ function analyzeVideo(
     video.description.toLowerCase();
 
   const q =
-    keyword.toLowerCase().trim();
+    (keyword || '').toLowerCase().trim();
 
   const words =
     q
-      .split(/\s+/)
-      .filter(
-        word =>
-          word.length > 1
-      );
+      ? q.split(/\s+/).filter(
+          x => x.length > 1
+        )
+      : [];
 
-  const relevance =
-    calculateRelevance(
-      title,
-      description,
-      q,
-      words
-    );
+  let relevance = 50;
+
+  if (q) {
+
+    relevance =
+      calculateRelevance(
+        title,
+        description,
+        q,
+        words
+      );
+  }
 
   const titleScore =
     calculateTitleScore(
@@ -713,11 +639,8 @@ function analyzeVideo(
     video.tags > 0
       ? Math.min(
           100,
-          35 +
-          Math.min(
-            65,
-            video.tags * 4
-          )
+          40 +
+          video.tags * 4
         )
       : 0;
 
@@ -729,13 +652,13 @@ function analyzeVideo(
   const seoScore =
     clamp(
       Math.round(
-        relevance * 0.30 +
-        titleScore * 0.20 +
-        descriptionScore * 0.12 +
-        tagsScore * 0.08 +
+        relevance * 0.28 +
+        titleScore * 0.22 +
+        descriptionScore * 0.15 +
+        tagsScore * 0.10 +
         engagement * 0.10 +
         freshness * 0.05 +
-        velocity * 0.15
+        velocity * 0.10
       )
     );
 
@@ -779,9 +702,9 @@ function analyzeVideo(
 }
 
 
-// ======================================================
+// =========================================================
 // RELEVANCE
-// ======================================================
+// =========================================================
 
 function calculateRelevance(
   title,
@@ -791,38 +714,28 @@ function calculateRelevance(
 ) {
 
   if (!words.length) {
-    return 0;
+    return 50;
   }
 
   let score = 0;
 
   if (title.includes(q)) {
-    score += 60;
+    score += 65;
   }
 
   const titleMatches =
     words.filter(
-      word =>
-        title.includes(word)
+      w => title.includes(w)
     ).length;
 
   score +=
-    (titleMatches / words.length) *
-    25;
+    (
+      titleMatches /
+      words.length
+    ) * 25;
 
   if (description.includes(q)) {
     score += 10;
-  } else {
-
-    const descMatches =
-      words.filter(
-        word =>
-          description.includes(word)
-      ).length;
-
-    score +=
-      (descMatches / words.length) *
-      5;
   }
 
   return clamp(
@@ -831,9 +744,9 @@ function calculateRelevance(
 }
 
 
-// ======================================================
-// TITLE SCORE
-// ======================================================
+// =========================================================
+// TITLE
+// =========================================================
 
 function calculateTitleScore(
   title,
@@ -843,30 +756,36 @@ function calculateTitleScore(
 
   let score = 0;
 
-  if (title.includes(q)) {
-    score += 65;
-  }
+  if (q && title.includes(q)) {
+    score += 70;
+  } else if (q) {
 
-  const matches =
-    words.filter(
-      word =>
-        title.includes(word)
-    ).length;
+    const matched =
+      words.filter(
+        w => title.includes(w)
+      ).length;
 
-  if (words.length) {
-
-    score +=
-      (
-        matches /
-        words.length
-      ) * 25;
+    if (words.length) {
+      score +=
+        (
+          matched /
+          words.length
+        ) * 50;
+    }
+  } else {
+    score = 55;
   }
 
   if (
-    title.length >= 25 &&
-    title.length <= 75
+    title.length >= 30 &&
+    title.length <= 70
   ) {
-    score += 10;
+    score += 30;
+  } else if (
+    title.length >= 20 &&
+    title.length <= 80
+  ) {
+    score += 20;
   }
 
   return clamp(
@@ -875,9 +794,9 @@ function calculateTitleScore(
 }
 
 
-// ======================================================
-// DESCRIPTION SCORE
-// ======================================================
+// =========================================================
+// DESCRIPTION
+// =========================================================
 
 function calculateDescriptionScore(
   description,
@@ -889,25 +808,27 @@ function calculateDescriptionScore(
     return 0;
   }
 
-  let score = 0;
+  let score = 30;
 
-  if (description.includes(q)) {
-    score += 60;
+  if (
+    q &&
+    description.includes(q)
+  ) {
+    score += 45;
   }
 
   const matches =
     words.filter(
-      word =>
-        description.includes(word)
+      w =>
+        description.includes(w)
     ).length;
 
   if (words.length) {
-
     score +=
       (
         matches /
         words.length
-      ) * 30;
+      ) * 15;
   }
 
   if (description.length >= 150) {
@@ -920,25 +841,22 @@ function calculateDescriptionScore(
 }
 
 
-// ======================================================
-// VIEW VELOCITY
-// ======================================================
+// =========================================================
+// VELOCITY
+// =========================================================
 
 function calculateViewVelocity(
   views,
   ageHours
 ) {
 
-  const velocity =
-    velocityValue(
-      views,
-      ageHours
-    );
-
   return clamp(
     Math.round(
       normalizeLog(
-        velocity,
+        velocityValue(
+          views,
+          ageHours
+        ),
         0.1,
         100000
       )
@@ -954,11 +872,8 @@ function velocityValue(
 
   const hours =
     Math.max(
-      1,
-      Math.min(
-        ageHours || 1,
-        24 * 365
-      )
+      0.1,
+      Number(ageHours || 0.1)
     );
 
   return (
@@ -968,9 +883,9 @@ function velocityValue(
 }
 
 
-// ======================================================
+// =========================================================
 // ENGAGEMENT
-// ======================================================
+// =========================================================
 
 function calculateEngagement(
   views,
@@ -988,46 +903,40 @@ function calculateEngagement(
   const commentRate =
     comments / views;
 
-  const score =
-    (
-      likeRate * 100 * 0.7 +
-      commentRate * 100 * 3 * 0.3
-    ) * 100;
-
   return clamp(
-    Math.round(score)
+    Math.round(
+      (
+        likeRate * 100 * 0.7 +
+        commentRate * 100 * 3 * 0.3
+      ) * 100
+    )
   );
 }
 
 
-// ======================================================
+// =========================================================
 // FRESHNESS
-// ======================================================
+// =========================================================
 
 function calculateFreshness(
   ageHours
 ) {
 
-  const hours =
-    Math.max(
-      0,
-      ageHours || 0
-    );
-
-  if (hours <= 24) return 100;
-  if (hours <= 72) return 90;
-  if (hours <= 168) return 80;
-  if (hours <= 720) return 65;
-  if (hours <= 2160) return 45;
-  if (hours <= 4320) return 30;
+  if (ageHours < 1) return 100;
+  if (ageHours < 24) return 95;
+  if (ageHours < 72) return 90;
+  if (ageHours < 168) return 80;
+  if (ageHours < 720) return 65;
+  if (ageHours < 2160) return 45;
+  if (ageHours < 4320) return 30;
 
   return 15;
 }
 
 
-// ======================================================
-// VIEW SCORE
-// ======================================================
+// =========================================================
+// VIEWS
+// =========================================================
 
 function calculateViewScore(
   views
@@ -1037,60 +946,40 @@ function calculateViewScore(
     return 0;
   }
 
-  return clamp(
-    Math.round(
-      normalizeLog(
-        views,
-        10,
-        10000000
-      )
-    )
+  return normalizeLog(
+    views,
+    10,
+    10000000
   );
 }
 
 
-// ======================================================
-// MARKET ANALYSIS
-// ======================================================
+// =========================================================
+// MARKET
+// =========================================================
 
-function analyzeMarket(
-  items
-) {
+function analyzeMarket(items) {
 
   if (!items.length) {
     return emptyMarket();
   }
 
   const views =
-    items.map(
-      x => x.views || 0
-    );
+    items.map(x => x.views || 0);
 
   const seo =
-    items.map(
-      x => x.seoScore || 0
-    );
+    items.map(x => x.seoScore || 0);
 
   const relevance =
     items.map(
       x => x.relevanceScore || 0
     );
 
-  const velocity =
-    items.map(
-      x => x.velocityScore || 0
-    );
-
-  const engagement =
-    items.map(
-      x => x.engagementScore || 0
-    );
-
-  const avgViews =
-    average(views);
-
   const medianViews =
     median(views);
+
+  const averageViews =
+    average(views);
 
   const averageSEO =
     average(seo);
@@ -1098,30 +987,21 @@ function analyzeMarket(
   const averageRelevance =
     average(relevance);
 
-  const averageVelocity =
-    average(velocity);
-
-  const averageEngagement =
-    average(engagement);
-
-  const viewStrength =
-    normalizeLog(
-      medianViews,
-      10,
-      1000000
-    );
-
   const competitionScore =
     clamp(
       Math.round(
-        viewStrength * 0.40 +
-        averageSEO * 0.25 +
-        averageVelocity * 0.20 +
-        averageEngagement * 0.15
+        normalizeLog(
+          medianViews,
+          10,
+          1000000
+        ) * 0.45 +
+        averageSEO * 0.35 +
+        averageRelevance * 0.20
       )
     );
 
-  let level = 'Rendah';
+  let level =
+    'Rendah';
 
   if (competitionScore >= 70) {
     level = 'Tinggi';
@@ -1132,7 +1012,7 @@ function analyzeMarket(
   return {
 
     averageViews:
-      Math.round(avgViews),
+      Math.round(averageViews),
 
     medianViews:
       Math.round(medianViews),
@@ -1143,12 +1023,6 @@ function analyzeMarket(
     averageRelevance:
       Math.round(averageRelevance),
 
-    averageVelocity:
-      Math.round(averageVelocity),
-
-    averageEngagement:
-      Math.round(averageEngagement),
-
     competitionScore,
 
     level
@@ -1156,151 +1030,96 @@ function analyzeMarket(
 }
 
 
-// ======================================================
-// VIDEO OPPORTUNITY
-// ======================================================
+// =========================================================
+// OPPORTUNITY
+// =========================================================
 
 function calculateOpportunity(
   video,
   market
 ) {
 
-  const competitorWeakness =
-    100 -
-    market.competitionScore;
-
-  const videoStrength =
-    video.seoScore * 0.35 +
-    video.velocityScore * 0.30 +
-    video.engagementScore * 0.20 +
-    video.viewScore * 0.15;
-
-  const videoWeakness =
-    100 -
-    videoStrength;
-
   const score =
     clamp(
       Math.round(
-        video.relevanceScore * 0.30 +
-        competitorWeakness * 0.35 +
-        videoWeakness * 0.25 +
-        video.freshnessScore * 0.10
+        video.relevanceScore * 0.25 +
+        (
+          100 -
+          market.competitionScore
+        ) * 0.35 +
+        (
+          100 -
+          video.seoScore
+        ) * 0.25 +
+        video.freshnessScore * 0.15
       )
     );
 
-  let label = 'Sangat Sulit';
+  let label =
+    'Sulit';
 
   if (score >= 80) {
     label = 'Peluang Tinggi';
   } else if (score >= 65) {
-    label = 'Layak Dicoba';
+    label = 'Bagus';
   } else if (score >= 50) {
     label = 'Sedang';
   } else if (score >= 35) {
     label = 'Rendah';
-  }
-
-  let reason =
-    'Kompetisi relatif kuat.';
-
-  if (score >= 80) {
-    reason =
-      'Kompetitor relatif lemah dan keyword cukup relevan.';
- } else if (score >= 65) {
-    reason =
-      'Masih ada celah untuk membuat video yang lebih optimal.';
-  } else if (score >= 50) {
-    reason =
-      'Peluang ada, tetapi perlu optimasi judul dan konten.';
   }
 
   return {
     score,
     label,
-    reason
+    reason:
+      score >= 65
+        ? 'Masih terdapat celah untuk bersaing.'
+        : 'Kompetisi relatif kuat.'
   };
 }
 
 
-// ======================================================
+// =========================================================
 // KEYWORD OPPORTUNITY
-// ======================================================
+// =========================================================
 
 function calculateKeywordOpportunity(
   market
 ) {
 
-  const competition =
-    market.competitionScore;
-
-  const relevance =
-    market.averageRelevance;
-
-  const seo =
-    market.averageSEO;
-
-  const velocity =
-    market.averageVelocity;
-
-  const competitionOpportunity =
-    100 - competition;
-
-  const seoGap =
-    100 - seo;
-
-  const velocityGap =
-    100 - velocity;
-
   const score =
     clamp(
       Math.round(
-        relevance * 0.35 +
-        competitionOpportunity * 0.35 +
-        seoGap * 0.20 +
-        velocityGap * 0.10
+        market.averageRelevance * 0.35 +
+        (
+          100 -
+          market.competitionScore
+        ) * 0.40 +
+        (
+          100 -
+          market.averageSEO
+        ) * 0.25
       )
     );
 
-  let label = 'Rendah';
+  let label =
+    'Rendah';
 
   let recommendation =
-    'Keyword ini cukup kompetitif.';
+    'Cari keyword yang lebih spesifik.';
 
   if (score >= 80) {
-
     label = 'Sangat Bagus';
-
     recommendation =
-      'Gas. Keyword menunjukkan peluang yang menarik.';
-
+      'Peluang menarik. Fokus pada judul, thumbnail dan retention.';
   } else if (score >= 65) {
-
     label = 'Bagus';
-
     recommendation =
-      'Layak dibuat. Fokus pada judul, thumbnail dan retention.';
-
+      'Layak dicoba dengan optimasi yang lebih kuat.';
   } else if (score >= 50) {
-
     label = 'Sedang';
-
     recommendation =
-      'Masih layak, tetapi perlu diferensiasi dari kompetitor.';
-
-  } else if (score >= 35) {
-
-    label = 'Rendah';
-
-    recommendation =
-      'Kompetisi cukup berat. Pertimbangkan keyword turunan.';
-
-  } else {
-
-    label = 'Sangat Rendah';
-
-    recommendation =
-      'Cari keyword yang lebih spesifik atau long-tail.';
+      'Masih bisa dicoba dengan diferensiasi.';
   }
 
   return {
@@ -1311,9 +1130,111 @@ function calculateKeywordOpportunity(
 }
 
 
-// ======================================================
+// =========================================================
+// SUGGESTIONS
+// =========================================================
+
+function generateSuggestions(
+  video,
+  a,
+  keyword
+) {
+
+  const suggestions = [];
+
+  if (a.titleScore < 60) {
+    suggestions.push({
+      type: 'error',
+      title: 'Perbaiki judul',
+      text:
+        keyword
+          ? `Masukkan keyword "${keyword}" secara natural di judul dan buat judul sekitar 30–70 karakter.`
+          : 'Buat judul lebih spesifik, jelas dan sekitar 30–70 karakter.'
+    });
+  } else {
+    suggestions.push({
+      type: 'success',
+      title: 'Judul sudah cukup baik',
+      text:
+        'Struktur dan panjang judul relatif bagus.'
+    });
+  }
+
+  if (a.descriptionScore < 60) {
+    suggestions.push({
+      type: 'warning',
+      title: 'Perkuat deskripsi',
+      text:
+        'Tambahkan penjelasan video dan keyword utama secara natural pada bagian awal deskripsi.'
+    });
+  } else {
+    suggestions.push({
+      type: 'success',
+      title: 'Deskripsi cukup baik',
+      text:
+        'Deskripsi sudah memiliki sinyal relevansi yang cukup.'
+    });
+  }
+
+  if (a.tagsScore < 50) {
+    suggestions.push({
+      type: 'warning',
+      title: 'Periksa tags',
+      text:
+        'Tambahkan variasi keyword yang benar-benar relevan dengan isi video.'
+    });
+  }
+
+  if (a.engagementScore < 40) {
+    suggestions.push({
+      type: 'warning',
+      title: 'Tingkatkan engagement',
+      text:
+        'Dorong penonton untuk berkomentar dan berinteraksi secara natural.'
+    });
+  }
+
+  if (a.velocityScore < 35) {
+    suggestions.push({
+      type: 'warning',
+      title: 'Momentum masih rendah',
+      text:
+        'Perhatikan thumbnail, judul dan kemampuan video mempertahankan penonton.'
+    });
+  } else {
+    suggestions.push({
+      type: 'success',
+      title: 'Momentum cukup bagus',
+      text:
+        'Kecepatan pertumbuhan views relatif menarik dibanding umur video.'
+    });
+  }
+
+  if (video.description.length < 100) {
+    suggestions.push({
+      type: 'error',
+      title: 'Deskripsi terlalu pendek',
+      text:
+        'Tambahkan konteks video, topik utama dan informasi yang membantu penonton.'
+    });
+  }
+
+  if (a.seoScore >= 80) {
+    suggestions.unshift({
+      type: 'success',
+      title: 'SEO sudah kuat',
+      text:
+        'Metadata video sudah cukup optimal. Fokus berikutnya pada thumbnail dan retention.'
+    });
+  }
+
+  return suggestions;
+}
+
+
+// =========================================================
 // AGE
-// ======================================================
+// =========================================================
 
 function calculateAgeHours(
   publishedAt
@@ -1351,14 +1272,20 @@ function formatAge(
   }
 
   if (hours < 1) {
-    return 'baru saja';
+
+    const minutes =
+      Math.max(
+        1,
+        Math.floor(
+          hours * 60
+        )
+      );
+
+    return `${minutes} menit`;
   }
 
   if (hours < 24) {
-    return (
-      Math.floor(hours) +
-      ' jam'
-    );
+    return `${Math.floor(hours)} jam`;
   }
 
   const days =
@@ -1367,10 +1294,7 @@ function formatAge(
     );
 
   if (days < 30) {
-    return (
-      days +
-      ' hari'
-    );
+    return `${days} hari`;
   }
 
   const months =
@@ -1379,24 +1303,31 @@ function formatAge(
     );
 
   if (months < 12) {
-    return (
-      months +
-      ' bulan'
-    );
+    return `${months} bulan`;
   }
 
-  return (
-    Math.floor(
-      months / 12
-    ) +
-    ' tahun'
-  );
+  return `${Math.floor(months / 12)} tahun`;
 }
 
 
-// ======================================================
+// =========================================================
+// SCORE LABEL
+// =========================================================
+
+function scoreLabel(score) {
+
+  if (score >= 80) return 'Sangat Bagus';
+  if (score >= 65) return 'Bagus';
+  if (score >= 50) return 'Sedang';
+  if (score >= 35) return 'Perlu Diperbaiki';
+
+  return 'Rendah';
+}
+
+
+// =========================================================
 // HELPERS
-// ======================================================
+// =========================================================
 
 function average(arr) {
 
@@ -1424,21 +1355,17 @@ function median(arr) {
       (a, b) => a - b
     );
 
-  const middle =
+  const mid =
     Math.floor(
       sorted.length / 2
     );
 
-  if (sorted.length % 2) {
-    return sorted[middle];
-  }
-
-  return (
-    (
-      sorted[middle - 1] +
-      sorted[middle]
-    ) / 2
-  );
+  return sorted.length % 2
+    ? sorted[mid]
+    : (
+        sorted[mid - 1] +
+        sorted[mid]
+      ) / 2;
 }
 
 
@@ -1503,10 +1430,6 @@ function emptyMarket() {
 
     averageRelevance: 0,
 
-    averageVelocity: 0,
-
-    averageEngagement: 0,
-
     competitionScore: 0,
 
     level: 'Tidak ada data'
@@ -1514,9 +1437,100 @@ function emptyMarket() {
 }
 
 
-// ======================================================
-// SHA256
-// ======================================================
+// =========================================================
+// CACHE
+// =========================================================
+
+async function refreshSearch(
+  env,
+  cacheKey,
+  staleKey,
+  q,
+  region
+) {
+
+  try {
+
+    const data =
+      await fetchSearch(
+        env,
+        q,
+        region
+      );
+
+    await putCache(
+      env,
+      cacheKey,
+      staleKey,
+      data,
+      SEARCH_TTL
+    );
+
+  } catch {}
+}
+
+
+async function refreshVideo(
+  env,
+  cacheKey,
+  staleKey,
+  id,
+  keyword
+) {
+
+  try {
+
+    const data =
+      await fetchVideo(
+        env,
+        id,
+        keyword
+      );
+
+    await putCache(
+      env,
+      cacheKey,
+      staleKey,
+      data,
+      VIDEO_TTL
+    );
+
+  } catch {}
+}
+
+
+async function putCache(
+  env,
+  key,
+  staleKey,
+  data,
+  ttl
+) {
+
+  const body =
+    JSON.stringify(data);
+
+  await env.CACHE.put(
+    key,
+    body,
+    {
+      expirationTtl: ttl
+    }
+  );
+
+  await env.CACHE.put(
+    staleKey,
+    body,
+    {
+      expirationTtl: STALE_TTL
+    }
+  );
+}
+
+
+// =========================================================
+// HASH
+// =========================================================
 
 async function hashKey(s) {
 
@@ -1546,9 +1560,9 @@ async function hashKey(s) {
 }
 
 
-// ======================================================
-// JSON RESPONSE
-// ======================================================
+// =========================================================
+// JSON
+// =========================================================
 
 function json(
   data,
