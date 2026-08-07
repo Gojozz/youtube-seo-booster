@@ -221,6 +221,263 @@ export default {
       }
 
 
+
+      // =====================================================
+      // AI SEO GENERATOR - GEMINI HYBRID
+      // =====================================================
+      if (u.pathname === '/api/generate') {
+
+        if (request.method !== 'POST') {
+          return json({
+            error: 'Method harus POST.'
+          }, 405, {
+            Allow: 'POST'
+          });
+        }
+
+        if (!env.GEMINI_API_KEY) {
+          return json({
+            error: 'GEMINI_API_KEY belum dipasang sebagai Worker Secret.'
+          }, 500);
+        }
+
+        let body;
+
+        try {
+          body = await request.json();
+        } catch {
+          return json({
+            error: 'JSON request tidak valid.'
+          }, 400);
+        }
+
+        const keyword =
+          String(body?.keyword || '').trim();
+
+        const language =
+          String(body?.language || 'Indonesia').trim();
+
+        const style =
+          String(body?.style || 'Tutorial').trim();
+
+        const audience =
+          String(body?.audience || 'Umum').trim();
+
+        if (!keyword) {
+          return json({
+            error: 'Keyword/topik wajib diisi.'
+          }, 400);
+        }
+
+        if (keyword.length > 200) {
+          return json({
+            error: 'Keyword terlalu panjang.'
+          }, 400);
+        }
+
+        try {
+
+          // Ambil data kompetitor YouTube dari endpoint internal.
+          const competitorData =
+            await fetchSearch(env, keyword, 'ID');
+
+          const competitors =
+            (competitorData.items || [])
+              .slice(0, 15)
+              .map(video => ({
+                title: video.title || '',
+                channel: video.channelTitle || '',
+                views: video.views || 0,
+                likes: video.likes || 0,
+                comments: video.comments || 0,
+                publishedAt: video.publishedAt || '',
+                seoScore: video.seoScore || 0,
+                opportunityScore:
+                  video.opportunityScore || 0
+              }));
+
+          const market =
+            competitorData.market || {};
+
+          const prompt = `
+Kamu adalah YouTube SEO strategist.
+
+Buat paket SEO YouTube berdasarkan data pencarian YouTube nyata.
+
+KEYWORD UTAMA:
+${keyword}
+
+BAHASA:
+${language}
+
+GAYA KONTEN:
+${style}
+
+TARGET AUDIENS:
+${audience}
+
+DATA MARKET:
+${JSON.stringify(market)}
+
+DATA KOMPETITOR:
+${JSON.stringify(competitors)}
+
+TUGAS:
+
+1. Buat 10 judul YouTube.
+2. Judul harus menarik tetapi tetap relevan.
+3. Jangan clickbait yang menipu.
+4. Jangan keyword stuffing.
+5. Variasikan struktur judul.
+6. Buat satu deskripsi YouTube yang natural.
+7. Buat 15-25 tag relevan.
+8. Buat 8-12 hashtag relevan.
+9. Gunakan bahasa yang diminta.
+10. Jangan mengklaim sesuatu yang tidak diketahui.
+11. Jangan menyalin judul kompetitor secara persis.
+
+OUTPUT HARUS JSON VALID SAJA.
+
+Format:
+
+{
+  "titles": [
+    {
+      "title": "...",
+      "score": 0,
+      "reason": "..."
+    }
+  ],
+  "description": "...",
+  "tags": ["..."],
+  "hashtags": ["..."]
+}
+
+Score judul 0-100 berdasarkan relevansi,
+daya tarik, kejelasan, potensi CTR, dan naturalness.
+
+Jangan gunakan markdown.
+Jangan gunakan code fence.
+`;
+
+          const aiResponse =
+            await fetch(
+              'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' +
+                encodeURIComponent(env.GEMINI_API_KEY),
+              {
+                method: 'POST',
+
+                headers: {
+                  'content-type': 'application/json'
+                },
+
+                body: JSON.stringify({
+                  contents: [
+                    {
+                      parts: [
+                        {
+                          text: prompt
+                        }
+                      ]
+                    }
+                  ],
+
+                  generationConfig: {
+                    temperature: 0.7,
+                    responseMimeType: 'application/json'
+                  }
+                })
+              }
+            );
+
+          const aiData =
+            await aiResponse.json();
+
+          if (!aiResponse.ok) {
+            throw new Error(
+              aiData?.error?.message ||
+              'Gemini API request gagal.'
+            );
+          }
+
+          const text =
+            aiData?.candidates?.[0]?.content?.parts?.[0]?.text ||
+            '';
+
+          if (!text) {
+            throw new Error(
+              'Gemini tidak menghasilkan respons.'
+            );
+          }
+
+          let result;
+
+          try {
+            result = JSON.parse(text);
+          } catch {
+            const cleaned =
+              text
+                .replace(/^```json\s*/i, '')
+                .replace(/^```\s*/i, '')
+                .replace(/\s*```$/i, '')
+                .trim();
+
+            result = JSON.parse(cleaned);
+          }
+
+          return json({
+            success: true,
+
+            keyword,
+
+            market: {
+              opportunityScore:
+                market.opportunityScore ?? 0,
+
+              competitionScore:
+                market.competitionScore ?? 0,
+
+              medianViews:
+                market.medianViews ?? 0,
+
+              averageSEO:
+                market.averageSEO ?? 0,
+
+              averageRelevance:
+                market.averageRelevance ?? 0
+            },
+
+            competitors,
+
+            titles:
+              Array.isArray(result.titles)
+                ? result.titles.slice(0, 10)
+                : [],
+
+            description:
+              result.description || '',
+
+            tags:
+              Array.isArray(result.tags)
+                ? result.tags.slice(0, 25)
+                : [],
+
+            hashtags:
+              Array.isArray(result.hashtags)
+                ? result.hashtags.slice(0, 12)
+                : []
+          });
+
+        } catch (error) {
+
+          return json({
+            error:
+              error?.message ||
+              'AI Generator gagal.'
+          }, 500);
+        }
+      }
+
       return json({
         error: 'Endpoint tidak ditemukan.'
       }, 404);

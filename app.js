@@ -650,3 +650,477 @@ function showError(
   if (marketMedian) {
   }
 }
+
+/* =========================================================
+   AI SEO GENERATOR
+   ========================================================= */
+
+(function initAIGenerator() {
+
+  const generateBtn =
+    document.getElementById('generateSeoBtn');
+
+  if (!generateBtn) return;
+
+  const keywordInput =
+    document.getElementById('generatorKeyword');
+
+  const languageInput =
+    document.getElementById('generatorLanguage');
+
+  const styleInput =
+    document.getElementById('generatorStyle');
+
+  const audienceInput =
+    document.getElementById('generatorAudience');
+
+  const loading =
+    document.getElementById('generatorLoading');
+
+  const errorBox =
+    document.getElementById('generatorError');
+
+  const resultBox =
+    document.getElementById('generatorResult');
+
+  function showGeneratorError(message) {
+    if (!errorBox) return;
+
+    errorBox.textContent = message;
+    errorBox.classList.remove('hidden');
+  }
+
+  function hideGeneratorError() {
+    if (!errorBox) return;
+
+    errorBox.textContent = '';
+    errorBox.classList.add('hidden');
+  }
+
+  function escapeGenerator(value) {
+    return String(value || '')
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&#039;');
+  }
+
+  function formatGeneratorNumber(value) {
+
+    const n = Number(value || 0);
+
+    if (n >= 1000000000) {
+      return (
+        (n / 1000000000)
+          .toFixed(1)
+          .replace('.0', '') +
+        'B'
+      );
+    }
+
+    if (n >= 1000000) {
+      return (
+        (n / 1000000)
+          .toFixed(1)
+          .replace('.0', '') +
+        'M'
+      );
+    }
+
+    if (n >= 1000) {
+      return (
+        (n / 1000)
+          .toFixed(1)
+          .replace('.0', '') +
+        'K'
+      );
+    }
+
+    return n.toLocaleString('id-ID');
+  }
+
+  function renderGenerator(data) {
+
+    const market =
+      data.market || {};
+
+    const titles =
+      Array.isArray(data.titles)
+        ? data.titles
+        : [];
+
+    const tags =
+      Array.isArray(data.tags)
+        ? data.tags
+        : [];
+
+    const hashtags =
+      Array.isArray(data.hashtags)
+        ? data.hashtags
+        : [];
+
+    const opportunity =
+      document.getElementById(
+        'generatorOpportunity'
+      );
+
+    const competition =
+      document.getElementById(
+        'generatorCompetition'
+      );
+
+    const median =
+      document.getElementById(
+        'generatorMedianViews'
+      );
+
+    if (opportunity) {
+      opportunity.textContent =
+        `${market.opportunityScore ?? 0}/100`;
+    }
+
+    if (competition) {
+      competition.textContent =
+        `${market.competitionScore ?? 0}/100`;
+    }
+
+    if (median) {
+      median.textContent =
+        formatGeneratorNumber(
+          market.medianViews
+        );
+    }
+
+    const titleContainer =
+      document.getElementById(
+        'generatedTitles'
+      );
+
+    if (titleContainer) {
+
+      titleContainer.innerHTML =
+        titles.length
+          ? titles.map((item, index) => {
+
+              const title =
+                typeof item === 'string'
+                  ? item
+                  : item.title || '';
+
+              const score =
+                typeof item === 'object'
+                  ? item.score ?? ''
+                  : '';
+
+              const reason =
+                typeof item === 'object'
+                  ? item.reason || ''
+                  : '';
+
+              return `
+                <div class="generated-title">
+                  <div class="generated-title-number">
+                    ${index + 1}
+                  </div>
+
+                  <div class="generated-title-content">
+
+                    <strong>
+                      ${escapeGenerator(title)}
+                    </strong>
+
+                    ${
+                      score !== ''
+                        ? `<span class="title-score">
+                            SEO ${escapeGenerator(score)}/100
+                          </span>`
+                        : ''
+                    }
+
+                    ${
+                      reason
+                        ? `<small>
+                            ${escapeGenerator(reason)}
+                          </small>`
+                        : ''
+                    }
+
+                  </div>
+
+                  <button
+                    type="button"
+                    class="copy-single-btn"
+                    data-copy="${escapeGenerator(title)}"
+                  >
+                    📋
+                  </button>
+
+                </div>
+              `;
+
+            }).join('')
+          : '<div class="empty">Tidak ada judul.</div>';
+    }
+
+    const description =
+      document.getElementById(
+        'generatedDescription'
+      );
+
+    if (description) {
+      description.value =
+        data.description || '';
+    }
+
+    const tagContainer =
+      document.getElementById(
+        'generatedTags'
+      );
+
+    if (tagContainer) {
+
+      tagContainer.innerHTML =
+        tags.map(tag => `
+          <span
+            class="generated-tag"
+            data-copy="${escapeGenerator(tag)}"
+          >
+            ${escapeGenerator(tag)}
+          </span>
+        `).join('');
+    }
+
+    const hashtagContainer =
+      document.getElementById(
+        'generatedHashtags'
+      );
+
+    if (hashtagContainer) {
+
+      hashtagContainer.innerHTML =
+        hashtags.map(tag => `
+          <span
+            class="generated-hashtag"
+            data-copy="${escapeGenerator(tag)}"
+          >
+            ${escapeGenerator(tag)}
+          </span>
+        `).join('');
+    }
+
+    if (resultBox) {
+      resultBox.classList.remove('hidden');
+    }
+  }
+
+  generateBtn.addEventListener(
+    'click',
+    async () => {
+
+      const keyword =
+        keywordInput
+          ?.value
+          .trim();
+
+      if (!keyword) {
+        showGeneratorError(
+          'Masukkan keyword atau topik terlebih dahulu.'
+        );
+        keywordInput?.focus();
+        return;
+      }
+
+      hideGeneratorError();
+
+      if (loading) {
+        loading.classList.remove('hidden');
+      }
+
+      if (resultBox) {
+        resultBox.classList.add('hidden');
+      }
+
+      generateBtn.disabled = true;
+
+      try {
+
+        const response =
+          await fetch(
+            '/api/generate',
+            {
+              method: 'POST',
+
+              headers: {
+                'Content-Type':
+                  'application/json'
+              },
+
+              body: JSON.stringify({
+                keyword,
+
+                language:
+                  languageInput?.value ||
+                  'Indonesia',
+
+                style:
+                  styleInput?.value ||
+                  'Tutorial',
+
+                audience:
+                  audienceInput?.value ||
+                  'Umum'
+              })
+            }
+          );
+
+        const data =
+          await response.json();
+
+        if (!response.ok) {
+          throw new Error(
+            data.error ||
+            'Generator gagal.'
+          );
+        }
+
+        renderGenerator(data);
+
+      } catch (error) {
+
+        showGeneratorError(
+          error?.message ||
+          'Terjadi kesalahan.'
+        );
+
+      } finally {
+
+        if (loading) {
+          loading.classList.add('hidden');
+        }
+
+        generateBtn.disabled = false;
+      }
+    }
+  );
+
+  keywordInput?.addEventListener(
+    'keydown',
+    event => {
+
+      if (
+        event.key === 'Enter'
+      ) {
+        generateBtn.click();
+      }
+
+    }
+  );
+
+  document.addEventListener(
+    'click',
+    async event => {
+
+      const single =
+        event.target.closest(
+          '.copy-single-btn'
+        );
+
+      if (single) {
+
+        const value =
+          single.getAttribute(
+            'data-copy'
+          ) || '';
+
+        try {
+
+          await navigator.clipboard.writeText(
+            value
+          );
+
+          single.textContent = '✓';
+
+          setTimeout(() => {
+            single.textContent = '📋';
+          }, 1200);
+
+        } catch {}
+
+        return;
+      }
+
+      const tag =
+        event.target.closest(
+          '[data-copy].generated-tag, [data-copy].generated-hashtag'
+        );
+
+      if (tag) {
+
+        const value =
+          tag.getAttribute(
+            'data-copy'
+          ) || '';
+
+        try {
+          await navigator.clipboard.writeText(
+            value
+          );
+        } catch {}
+
+        return;
+      }
+
+      const copyBtn =
+        event.target.closest(
+          '.copy-btn'
+        );
+
+      if (!copyBtn) return;
+
+      const targetId =
+        copyBtn.getAttribute(
+          'data-copy-target'
+        );
+
+      const target =
+        document.getElementById(
+          targetId
+        );
+
+      if (!target) return;
+
+      let value = '';
+
+      if (
+        target.tagName === 'TEXTAREA' ||
+        target.tagName === 'INPUT'
+      ) {
+        value = target.value;
+      } else {
+        value = target.innerText;
+      }
+
+      try {
+
+        await navigator.clipboard.writeText(
+          value
+        );
+
+        const original =
+          copyBtn.textContent;
+
+        copyBtn.textContent =
+          '✓ Tersalin';
+
+        setTimeout(() => {
+          copyBtn.textContent =
+            original;
+        }, 1200);
+
+      } catch {}
+
+    }
+  );
+
+})();
