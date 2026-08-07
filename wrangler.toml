@@ -1,0 +1,11 @@
+name = "youtube-seo-booster-v21"
+main = "worker.js"
+compatibility_date = "2026-08-07"
+
+[assets]
+directory = "./"
+binding = "ASSETS"
+
+[[kv_namespaces]]
+binding = "CACHE"
+id = "GANTI_DENGAN_KV_NAMESPACE_ID"
