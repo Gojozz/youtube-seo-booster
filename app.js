@@ -1122,16 +1122,3 @@ function showError(element, message) {
 
 })();
 
-/* CLICK TEST - SEO GENERATOR */
-document.addEventListener('DOMContentLoaded', () => {
-  const btn = document.getElementById('generateSeoBtn');
-
-  if (btn) {
-    console.log('SEO GENERATOR BUTTON READY');
-
-    btn.addEventListener('click', () => {
-      console.log('SEO GENERATOR BUTTON CLICKED');
-      alert('Tombol Generate SEO berhasil diklik');
-    });
-  }
-});
