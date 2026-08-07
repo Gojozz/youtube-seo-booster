@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://SUBDOMAIN-KAMU/sitemap.xml
+Sitemap: https://livebiz.dev.tc/sitemap.xml
