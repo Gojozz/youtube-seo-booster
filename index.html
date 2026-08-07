@@ -643,5 +643,201 @@
   );
 </script>
 
+
+<!-- =========================================================
+     HYBRID YOUTUBE SEO GENERATOR
+     ========================================================= -->
+<section class="seo-generator" id="seoGenerator">
+
+  <div class="section-header">
+    <span class="section-kicker">AI + YOUTUBE DATA</span>
+    <h2>🚀 YouTube SEO Generator</h2>
+    <p>
+      Buat judul, deskripsi, tag, dan hashtag berdasarkan keyword
+      serta data pencarian YouTube.
+    </p>
+  </div>
+
+  <div class="generator-form">
+
+    <div class="form-group">
+      <label for="generatorKeyword">Keyword / Topik Video</label>
+      <input
+        id="generatorKeyword"
+        type="text"
+        placeholder="Contoh: cara menanam timun"
+        autocomplete="off"
+      >
+    </div>
+
+    <div class="generator-row">
+
+      <div class="form-group">
+        <label for="generatorLanguage">Bahasa</label>
+        <select id="generatorLanguage">
+          <option value="id">Indonesia</option>
+          <option value="en">English</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="generatorStyle">Gaya Judul</label>
+        <select id="generatorStyle">
+          <option value="seo">SEO / Search</option>
+          <option value="click">Click Worthy</option>
+          <option value="professional">Professional</option>
+          <option value="viral">Viral</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="generatorCount">Jumlah Judul</label>
+        <select id="generatorCount">
+          <option value="5">5 Judul</option>
+          <option value="10">10 Judul</option>
+        </select>
+      </div>
+
+    </div>
+
+    <button
+      id="generatorBtn"
+      class="primary-btn"
+      type="button"
+    >
+      ✨ Generate SEO
+    </button>
+
+    <div
+      id="generatorError"
+      class="error hidden"
+    ></div>
+
+    <div
+      id="generatorLoading"
+      class="generator-loading hidden"
+    >
+      <span>⏳</span>
+      <span>Sedang menganalisis keyword dan membuat rekomendasi...</span>
+    </div>
+
+  </div>
+
+  <div
+    id="generatorResult"
+    class="generator-result hidden"
+  >
+
+    <div class="generator-market">
+
+      <div>
+        <span>Opportunity</span>
+        <strong id="generatorOpportunity">-</strong>
+      </div>
+
+      <div>
+        <span>Competition</span>
+        <strong id="generatorCompetition">-</strong>
+      </div>
+
+      <div>
+        <span>Relevance</span>
+        <strong id="generatorRelevance">-</strong>
+      </div>
+
+    </div>
+
+    <!-- TITLE -->
+    <div class="generator-card">
+
+      <div class="generator-card-header">
+        <h3>🎯 Title Generator</h3>
+
+        <button
+          class="copy-btn"
+          type="button"
+          data-copy-target="generatedTitles"
+        >
+          Copy Semua
+        </button>
+      </div>
+
+      <div id="generatedTitles"></div>
+
+    </div>
+
+    <!-- DESCRIPTION -->
+    <div class="generator-card">
+
+      <div class="generator-card-header">
+        <h3>📝 Description Generator</h3>
+
+        <button
+          class="copy-btn"
+          type="button"
+          data-copy-target="generatedDescription"
+        >
+          Copy
+        </button>
+      </div>
+
+      <textarea
+        id="generatedDescription"
+        class="generated-text"
+        readonly
+        placeholder="Deskripsi hasil generator akan muncul di sini..."
+      ></textarea>
+
+    </div>
+
+    <!-- TAGS -->
+    <div class="generator-card">
+
+      <div class="generator-card-header">
+        <h3>🏷️ Tag Generator</h3>
+
+        <button
+          class="copy-btn"
+          type="button"
+          data-copy-target="generatedTags"
+        >
+          Copy Semua
+        </button>
+      </div>
+
+      <div
+        id="generatedTags"
+        class="tag-list"
+      ></div>
+
+    </div>
+
+    <!-- HASHTAGS -->
+    <div class="generator-card">
+
+      <div class="generator-card-header">
+        <h3>#️⃣ Hashtag Generator</h3>
+
+        <button
+          class="copy-btn"
+          type="button"
+          data-copy-target="generatedHashtags"
+        >
+          Copy Semua
+        </button>
+      </div>
+
+      <div
+        id="generatedHashtags"
+        class="hashtag-list"
+      ></div>
+
+    </div>
+
+  </div>
+
+</section>
+
+
 </body>
 </html>
