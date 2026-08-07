@@ -500,11 +500,14 @@ function renderVideo(data) {
       analysis.seoScore
     );
 
-  $('videoSeoLabel').textContent =
-    analysis.seoLabel ||
-    scoreText(
-      analysis.seoScore
-    );
+  const videoSeoLabel = $('videoSeoLabel');
+  if (videoSeoLabel) {
+    videoSeoLabel.textContent =
+      analysis.seoLabel ||
+      scoreText(
+        analysis.seoScore
+      );
+  }
 
   $('videoRelevance').textContent =
     `${analysis.relevance ?? 0}`;
