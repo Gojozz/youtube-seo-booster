@@ -534,26 +534,6 @@ Jangan gunakan code fence.
             );
           }
 
-          const aiData =
-            await aiResponse.json();
-
-          if (!aiResponse.ok) {
-            throw new Error(
-              aiData?.error?.message ||
-              'Gemini API request gagal.'
-            );
-          }
-
-          const text =
-            aiData?.candidates?.[0]?.content?.parts?.[0]?.text ||
-            '';
-
-          if (!text) {
-            throw new Error(
-              'Gemini tidak menghasilkan respons.'
-            );
-          }
-
           let result;
 
           try {
