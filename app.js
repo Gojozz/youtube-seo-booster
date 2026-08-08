@@ -671,6 +671,9 @@ function showError(element, message) {
   const audienceInput =
     document.getElementById('generatorAudience');
 
+  const countInput =
+    document.getElementById('generatorCount');
+
   const loading =
     document.getElementById('generatorLoading');
 
@@ -787,6 +790,16 @@ function showError(element, message) {
         formatGeneratorNumber(
           market.medianViews
         );
+    }
+
+    const relevance =
+      document.getElementById(
+        'generatorRelevance'
+      );
+
+    if (relevance) {
+      relevance.textContent =
+        `${market.averageRelevance ?? 0}/100`;
     }
 
     const titleContainer =
@@ -966,7 +979,9 @@ function showError(element, message) {
 
                 audience:
                   audienceInput?.value ||
-                  'Umum'
+                  'Umum',
+                count:
+                  Number(countInput?.value || 5)
               })
             }
           );

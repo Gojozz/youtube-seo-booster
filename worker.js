@@ -263,6 +263,9 @@ export default {
         const audience =
           String(body?.audience || 'Umum').trim();
 
+        const count =
+          Number(body?.count || 5) === 10 ? 10 : 5;
+
         if (!keyword) {
           return json({
             error: 'Keyword/topik wajib diisi.'
@@ -324,7 +327,7 @@ ${JSON.stringify(competitors)}
 
 TUGAS:
 
-1. Buat 10 judul YouTube.
+1. Buat TEPAT ${count} judul YouTube.
 2. Judul harus menarik tetapi tetap relevan.
 3. Jangan clickbait yang menipu.
 4. Jangan keyword stuffing.
@@ -422,6 +425,10 @@ Jangan gunakan code fence.
                 .trim();
 
             result = JSON.parse(cleaned);
+          }
+
+          if (Array.isArray(result.titles)) {
+            result.titles = result.titles.slice(0, count);
           }
 
           return json({
