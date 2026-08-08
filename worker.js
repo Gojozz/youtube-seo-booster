@@ -235,9 +235,13 @@ export default {
           });
         }
 
-        if (!env.GEMINI_API_KEY) {
+        if (
+          !env.GEMINI_API_KEY &&
+          !env.OPENROUTER_API_KEY &&
+          !env.GROQ_API_KEY
+        ) {
           return json({
-            error: 'GEMINI_API_KEY belum dipasang sebagai Worker Secret.'
+            error: 'Tidak ada AI API key yang tersedia.'
           }, 500);
         }
 
@@ -363,17 +367,24 @@ Jangan gunakan markdown.
 Jangan gunakan code fence.
 `;
 
-          const aiResponse =
-            await fetch(
+          // =====================================================
+          // AI HYBRID FALLBACK
+          // Gemini -> OpenRouter -> Groq
+          // =====================================================
+
+          async function callGemini() {
+            if (!env.GEMINI_API_KEY) {
+              throw new Error('Gemini API key tidak tersedia.');
+            }
+
+            const response = await fetch(
               'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=' +
                 encodeURIComponent(env.GEMINI_API_KEY),
               {
                 method: 'POST',
-
                 headers: {
                   'content-type': 'application/json'
                 },
-
                 body: JSON.stringify({
                   contents: [
                     {
@@ -384,13 +395,144 @@ Jangan gunakan code fence.
                       ]
                     }
                   ],
-
                   generationConfig: {
+                    temperature: 0.7,
                     responseMimeType: 'application/json'
                   }
                 })
               }
             );
+
+            const data = await response.json();
+
+            if (!response.ok) {
+              throw new Error(
+                data?.error?.message ||
+                'Gemini API request gagal.'
+              );
+            }
+
+            return data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+          }
+
+          async function callOpenRouter() {
+            if (!env.OPENROUTER_API_KEY) {
+              throw new Error('OpenRouter API key tidak tersedia.');
+            }
+
+            const response = await fetch(
+              'https://openrouter.ai/api/v1/chat/completions',
+              {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': 'Bearer ' + env.OPENROUTER_API_KEY,
+                  'HTTP-Referer': 'https://youtube-seo-booster.sunsagaraofficial.workers.dev',
+                  'X-Title': 'YouTube SEO Booster'
+                },
+                body: JSON.stringify({
+                  model: 'openai/gpt-4o-mini',
+                  messages: [
+                    {
+                      role: 'user',
+                      content: prompt
+                    }
+                  ],
+                  temperature: 0.7,
+                  response_format: {
+                    type: 'json_object'
+                  }
+                })
+              }
+            );
+
+            const data = await response.json();
+
+            if (!response.ok) {
+              throw new Error(
+                data?.error?.message ||
+                'OpenRouter API request gagal.'
+              );
+            }
+
+            return data?.choices?.[0]?.message?.content || '';
+          }
+
+          async function callGroq() {
+            if (!env.GROQ_API_KEY) {
+              throw new Error('Groq API key tidak tersedia.');
+            }
+
+            const response = await fetch(
+              'https://api.groq.com/openai/v1/chat/completions',
+              {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': 'Bearer ' + env.GROQ_API_KEY
+                },
+                body: JSON.stringify({
+                  model: 'llama-3.3-70b-versatile',
+                  messages: [
+                    {
+                      role: 'user',
+                      content: prompt
+                    }
+                  ],
+                  temperature: 0.7,
+                  response_format: {
+                    type: 'json_object'
+                  }
+                })
+              }
+            );
+
+            const data = await response.json();
+
+            if (!response.ok) {
+              throw new Error(
+                data?.error?.message ||
+                'Groq API request gagal.'
+              );
+            }
+
+            return data?.choices?.[0]?.message?.content || '';
+          }
+
+          let text = '';
+          let lastError = null;
+
+          // 1. Gemini
+          try {
+            text = await callGemini();
+          } catch (error) {
+            lastError = error;
+          }
+
+          // 2. OpenRouter
+          if (!text) {
+            try {
+              text = await callOpenRouter();
+            } catch (error) {
+              lastError = error;
+            }
+          }
+
+          // 3. Groq
+          if (!text) {
+            try {
+              text = await callGroq();
+            } catch (error) {
+              lastError = error;
+            }
+          }
+
+          if (!text) {
+            throw new Error(
+              lastError?.message ||
+              'Semua AI generator gagal menghasilkan respons.'
+            );
+          }
 
           const aiData =
             await aiResponse.json();
